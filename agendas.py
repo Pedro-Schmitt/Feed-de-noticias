@@ -1,10 +1,9 @@
-"""Agendas oficiais: o que está em julgamento no STF, no STJ e no CSMP do MPGO, e as agendas do
+"""Agendas oficiais: o que está em julgamento no STF e no CSMP do MPGO, e as agendas do
 Presidente da República, do Senado Federal e da Câmara dos Deputados."""
 
 import html
 import io
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
@@ -131,102 +130,6 @@ def agenda_stf(hoje):
             })
     virtuais.sort(key=lambda v: v["inicio"])
     return {"presencial": presencial, "virtuais": virtuais}
-
-
-# --- STJ: pautas publicadas no Diário, pela API pública de comunicações processuais do CNJ ---
-# (o portal do STJ bloqueia acesso automático). Cada processo pautado vira uma comunicação:
-# "Processo incluído na Pauta de Julgamentos da QUINTA TURMA, Sessão Virtual do dia
-# 03/12/2026 11:30:00, com encerramento no dia 10/12/2026 11:29:59"
-
-COMUNICA = "https://comunicaapi.pje.jus.br/api/v1/comunicacao"
-PAUSA_COMUNICA = 0.5  # a API corta conexões simultâneas: as consultas vão uma de cada vez
-ORGAOS_STJ = [
-    "CORTE ESPECIAL", "PRIMEIRA SEÇÃO", "SEGUNDA SEÇÃO", "TERCEIRA SEÇÃO",
-    "PRIMEIRA TURMA", "SEGUNDA TURMA", "TERCEIRA TURMA", "QUARTA TURMA", "QUINTA TURMA", "SEXTA TURMA",
-]
-PAUTAS_RECENTES = timedelta(days=40)  # as pautas saem semanas antes da sessão
-MAX_PROCESSOS_STJ = 3
-
-PADRAO_PAUTA_STJ = re.compile(
-    r"[Pp]auta de [Jj]ulgamentos d[ao] (?P<orgao>.+?), (?P<tipo>Sessão \w+) do dia (?P<inicio>\d\d/\d\d/\d{4})"
-    r"(?:[^,]*, com encerramento no dia (?P<fim>\d\d/\d\d/\d{4}))?"
-)
-
-
-def _comunica_stj(texto, inicio, fim, itens):
-    try:
-        return _get(COMUNICA, params={
-            "siglaTribunal": "STJ", "texto": texto, "itensPorPagina": itens, "pagina": 1,
-            "dataDisponibilizacaoInicio": inicio.isoformat(), "dataDisponibilizacaoFim": fim.isoformat(),
-        }, headers={"Accept": "application/json"}).json()
-    finally:
-        time.sleep(PAUSA_COMUNICA)
-
-
-def _processo_stj(item):
-    texto = _sem_html(item.get("texto", ""))
-    processo = re.sub(r"\s*\(\d{4}/\d+-\d\)$", "", texto.split(" RELATOR")[0]).strip()  # tira o nº de registro
-    # O campo seguinte é uma palavra só antes de " :" (ex.: "AGRAVANTE :"); nomes não têm " :"
-    relator = re.search(r"RELATORA?\s*:\s*(.+?)\s+[A-ZÀ-Ý]+\s+:", texto)
-    return {
-        "processo": processo[:80],
-        "relator": _nome_proprio(relator.group(1)) if relator else "",
-        "link": item.get("link") or "",
-    }
-
-
-def agenda_stj(hoje):
-    # 1) Em que dias da semana cada órgão faz sessão virtual e presencial, pelas pautas mais recentes
-    dias_semana = {}
-    proximas = []
-    for orgao in ORGAOS_STJ:
-        dados = _comunica_stj(f'"Pauta de Julgamentos da {orgao}"', hoje - PAUTAS_RECENTES, hoje, 50)
-        for item in dados.get("items") or []:
-            achou = PADRAO_PAUTA_STJ.search(_sem_html(item.get("texto", "")))
-            if not achou:
-                continue
-            data = _data_br(achou["inicio"])
-            dias_semana.setdefault((orgao, achou["tipo"]), set()).add(data.weekday())
-            if achou["tipo"] != "Sessão Virtual" and data > hoje:
-                proximas.append((data, orgao))
-
-    # 2) As sessões em andamento: a virtual mais recente de cada órgão (duram uma semana)
-    #    e a presencial de hoje, se for dia de sessão daquele órgão
-    candidatas = []
-    for (orgao, tipo), semana in dias_semana.items():
-        if tipo == "Sessão Virtual":
-            inicio = next((hoje - timedelta(days=n) for n in range(7) if (hoje - timedelta(days=n)).weekday() in semana), None)
-        else:
-            inicio = hoje if hoje.weekday() in semana else None
-        if inicio:
-            candidatas.append((orgao, tipo, inicio))
-
-    # 3) Quantos processos há em cada uma, e os primeiros da lista
-    sessoes = []
-    for orgao, tipo, inicio in sorted(candidatas, key=lambda c: ORGAOS_STJ.index(c[0])):
-        dados = _comunica_stj(f'"{orgao}, {tipo} do dia {inicio:%d/%m/%Y}"', inicio - PAUTAS_RECENTES, hoje, MAX_PROCESSOS_STJ)
-        itens = dados.get("items") or []
-        if not dados.get("count") or not itens:
-            continue
-        encerramentos = [
-            achou["fim"] for achou in (PADRAO_PAUTA_STJ.search(_sem_html(i.get("texto", ""))) for i in itens)
-            if achou and achou["fim"]
-        ]
-        fim = _data_br(encerramentos[0]) if encerramentos else inicio
-        sessoes.append({
-            "orgao": orgao.title(),
-            "tipo": "virtual" if tipo == "Sessão Virtual" else "presencial",
-            "inicio": inicio.isoformat(),
-            "fim": fim.isoformat(),
-            "total": dados["count"],
-            "processos": [_processo_stj(i) for i in itens],
-        })
-
-    proximas = [
-        {"orgao": orgao.title(), "data": data.isoformat()}
-        for data, orgao in sorted(set(proximas))
-    ][:6]
-    return {"sessoes": sessoes, "proximas": proximas}
 
 
 # --- CSMP do MPGO: pautas publicadas no portal (o conteúdo vem do PDF de cada pauta) ---
@@ -453,7 +356,6 @@ def agenda_camara(hoje):
 
 AGENDAS = {
     "stf": agenda_stf,
-    "stj": agenda_stj,
     "csmp": agenda_csmp,
     "presidente": agenda_presidente,
     "senado": agenda_senado,

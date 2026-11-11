@@ -301,44 +301,6 @@ function agendaStf(stf, hoje) {
   return partes;
 }
 
-function agendaStj(stj, hoje) {
-  const partes = [];
-  if (stj.sessoes.length) {
-    const sessoes = stj.sessoes.map((s) => {
-      const div = elemento("div", "sessao");
-      const titulo = elemento("h4");
-      titulo.append(elemento("span", "etiqueta", s.tipo === "virtual" ? "Virtual" : "Presencial"), s.orgao);
-      const total = elemento("div", "contagens");
-      const span = elemento("span");
-      span.append(elemento("strong", "", s.total.toLocaleString("pt-BR")), s.total === 1 ? " processo" : " processos");
-      total.append(span);
-      div.append(titulo, elemento("p", "", s.tipo === "virtual" ? periodo(s.inicio, s.fim) : descricaoDia(s.inicio, hoje)), total);
-      const lista = listaCompromissos(s.processos.map((p, i) => ({
-        hora: `${i + 1}.`,
-        titulo: p.processo,
-        link: p.link,
-        detalhes: [p.relator && `Relator: ${p.relator}`],
-      })));
-      div.append(lista);
-      if (s.total > s.processos.length) {
-        div.append(elemento("p", "", `e mais ${(s.total - s.processos.length).toLocaleString("pt-BR")} processos nesta sessão`));
-      }
-      return div;
-    });
-    partes.push(bloco("Sessões em andamento", ...sessoes));
-  } else {
-    partes.push(elemento("p", "vazio", "Nenhuma sessão de julgamento em andamento."));
-  }
-  if (stj.proximas.length) {
-    partes.push(bloco("Próximas sessões presenciais", listaCompromissos(stj.proximas.map((p) => ({
-      hora: dataCurta(p.data),
-      titulo: p.orgao,
-    })))));
-  }
-  partes.push(rodapeLink("https://www.stj.jus.br/sites/portalp/Processos/Pautas-de-julgamento", "Pautas de julgamento no site do STJ"));
-  return partes;
-}
-
 const SITUACOES_CSMP = { andamento: "Em andamento", proxima: "Próxima", realizada: "Realizada" };
 
 function agendaCsmp(pautas) {
@@ -441,7 +403,6 @@ function agendaCamara(agenda, hoje) {
 
 const MONTAR_AGENDA = {
   stf: agendaStf,
-  stj: agendaStj,
   csmp: agendaCsmp,
   presidente: agendaPresidente,
   senado: agendaSenado,

@@ -76,7 +76,7 @@ def api_noticias():
 
 
 def carregar_agendas():
-    """Agendas do STF, STJ, CSMP, Presidente, Senado e Câmara, no máximo a cada 10 minutos."""
+    """Agendas do STF, CSMP, Presidente, Senado e Câmara, no máximo a cada 10 minutos."""
     with _lock_agendas:
         if time.time() - _cache_agendas["momento"] > CACHE_AGENDAS_SEGUNDOS:
             _cache_agendas["dados"] = agendas.coletar()
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     print("Buscando notícias e cotações (a primeira vez pode levar alguns segundos)...")
     noticias()
     atualizar_cotacoes_se_preciso()
-    # As agendas levam cerca de um minuto (o STJ é consultado aos poucos): carregam em segundo plano
+    # As agendas levam alguns segundos (o CSMP lê PDFs): carregam em segundo plano
     threading.Thread(target=carregar_agendas, daemon=True).start()
     threading.Thread(target=loop_diario, daemon=True).start()
     print("Site no ar em http://localhost:5000")

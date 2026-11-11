@@ -4,10 +4,9 @@ Site em Python que mostra as **cinco principais notícias de Política, Economia
 
 Há também um bloco de **notícias jurídicas** com as cinco principais sobre o STF, o STJ, o TJGO, o Ministério Público brasileiro, o Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP). Como esses órgãos não têm feed RSS acessível, as notícias vêm de buscas no Google Notícias (lista em `JURIDICO`, em `coletor.py`), que juntam os sites oficiais e a imprensa.
 
-As agendas (`agendas.py`) vêm direto das fontes oficiais. O que está em julgamento no STF, no STJ e no CSMP aparece dentro dos painéis de notícias desses órgãos; o bloco **Agendas** traz as do Presidente, do Senado e da Câmara:
+As agendas (`agendas.py`) vêm direto das fontes oficiais. O que está em julgamento no STF e no CSMP aparece dentro dos painéis de notícias desses órgãos; o bloco **Agendas** traz as do Presidente, do Senado e da Câmara:
 
 - **Em julgamento no STF**: sessões virtuais em andamento (quantidade de processos no Plenário e nas Turmas) e a próxima sessão presencial com a lista de processos, relator e resumo do tema (serviços do calendário de julgamentos do portal do STF)
-- **Em julgamento no STJ**: sessões em andamento de cada órgão (Corte Especial, Seções e Turmas), virtuais e presenciais, com o total de processos e os primeiros da pauta, e as próximas sessões presenciais. O portal do STJ bloqueia acesso automático, então os dados vêm das pautas publicadas no Diário, pela API pública de comunicações processuais do CNJ (consultada aos poucos, porque ela recusa pedidos simultâneos; leva cerca de um minuto)
 - **Em julgamento no CSMP do MPGO**: sessões em andamento e próximas, com o número de processos, os itens e os relatores, lidos do PDF da pauta publicado no portal do MPGO
 - **Presidente da República**: compromissos do dia no site do Planalto (até a agenda do dia sair, mostra a última publicada)
 - **Senado Federal**: sessões do Plenário (com as matérias em pauta) e reuniões das comissões, pelos dados abertos do Senado
