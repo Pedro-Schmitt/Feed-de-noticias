@@ -468,7 +468,7 @@ def coletar():
         futuros = {nome: executor.submit(funcao, hoje) for nome, funcao in AGENDAS.items()}
 
     dados = {"atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"), "hoje": hoje.isoformat()}
-    falhas = []
+    falhas, erros = [], {}
     for nome, futuro in futuros.items():
         try:
             dados[nome] = futuro.result()
@@ -476,7 +476,10 @@ def coletar():
             print(f"[agendas] Falha na agenda {nome}: {erro}")
             dados[nome] = None
             falhas.append(nome)
+            # O motivo vai junto no JSON publicado: o log do GitHub Actions só abre logado
+            erros[nome] = f"{type(erro).__name__}: {erro}"[:300]
     dados["falhas"] = falhas
+    dados["erros"] = erros
     return dados
 
 
