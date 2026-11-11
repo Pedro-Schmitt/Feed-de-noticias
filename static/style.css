@@ -1,0 +1,416 @@
+:root {
+  --fundo: #dfe5ee;
+  --painel: #ffffff;
+  --texto: #1d2230;
+  --suave: #4b5563;
+  --borda: #e3e6eb;
+  --destaque: #0f9d58;
+  /* Manchas de cor (verde, amarelo e azul) atrás dos painéis */
+  --veu-fundo:
+    radial-gradient(60vw 50vh at 0% 0%, rgb(0 156 59 / 0.18), transparent 70%),
+    radial-gradient(50vw 45vh at 100% 10%, rgb(255 205 0 / 0.20), transparent 70%),
+    radial-gradient(70vw 60vh at 60% 100%, rgb(0 39 118 / 0.14), transparent 70%);
+  --painel-destaque: #ffffff;
+  --painel-vidro: rgb(255 255 255 / 0.92);
+  --imagem-vazia: #e9edf3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #04060a;
+    --painel: #0a0e15;
+    --texto: #e8eaf0;
+    --suave: #9aa2b1;
+    --borda: #1a2230;
+    --destaque: #34c77b;
+    --veu-fundo:
+      radial-gradient(60vw 50vh at 0% 0%, rgb(0 156 59 / 0.22), transparent 70%),
+      radial-gradient(50vw 45vh at 100% 10%, rgb(255 205 0 / 0.10), transparent 70%),
+      radial-gradient(70vw 60vh at 60% 100%, rgb(40 90 220 / 0.18), transparent 70%);
+    --painel-destaque: #1c2433;
+    --painel-vidro: rgb(10 14 21 / 0.88);
+    --imagem-vazia: #121926;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fundo);
+  color: var(--texto);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--veu-fundo);
+  pointer-events: none;
+}
+
+header, main, footer {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+header { padding-top: 24px; }
+h1 { margin: 0 0 4px; font-size: 1.7rem; }
+h2 { margin: 0 0 4px; font-size: 1.1rem; }
+#subtitulo, .nota, footer { color: var(--suave); font-size: 0.9rem; }
+.nota { margin: 0 0 8px; }
+
+a { color: inherit; text-decoration: none; }
+
+.painel {
+  background: var(--painel-vidro);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 16px;
+}
+
+/* Filtros de editoria e busca */
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filtros button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: var(--painel);
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.filtros button:hover { border-color: var(--suave); }
+
+.filtros button.ativo {
+  background: var(--texto);
+  color: var(--painel);
+  border-color: var(--texto);
+}
+
+.filtros .contagem { opacity: 0.6; font-size: 0.8rem; margin-left: 4px; }
+
+.busca {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 7px 14px;
+  min-width: 0;
+  width: 280px;
+  max-width: 100%;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: var(--painel);
+  color: var(--texto);
+}
+
+.busca:focus { outline: 2px solid var(--destaque); outline-offset: 1px; }
+
+.cabecalho-painel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.cabecalho-painel h2 { margin: 0; }
+
+/* Alternador segmentado: Cartões | Lista */
+.alternador {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--borda);
+  background: var(--fundo);
+}
+
+.alternador button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--suave);
+  cursor: pointer;
+}
+
+.alternador button:hover { color: var(--texto); }
+
+.alternador button.ativo {
+  background: var(--painel-destaque);
+  color: var(--texto);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+
+/* Etiqueta com a cor do veículo */
+.fonte {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.fonte::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cor);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 0.75rem;
+  color: var(--suave);
+}
+
+/* Destaques */
+.destaques {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.destaque {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  background: var(--painel);
+}
+
+.destaque .imagem { aspect-ratio: 16 / 9; border-radius: 10px 10px 0 0; }
+.destaque .corpo { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.destaque h3 { margin: 0; font-size: 1.05rem; line-height: 1.3; }
+.destaque h3 a:hover { text-decoration: underline; }
+.destaque .resumo { margin: 0; font-size: 0.88rem; color: var(--suave); line-height: 1.45; }
+
+.tambem {
+  margin: auto 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--borda);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.tambem li { display: flex; gap: 8px; align-items: baseline; }
+.tambem li .fonte { flex: none; }
+.tambem a { color: var(--suave); line-height: 1.35; }
+.tambem a:hover { color: var(--texto); text-decoration: underline; }
+
+/* Balão "em N veículos", pendurado no topo do card */
+.balao {
+  position: absolute;
+  top: -13px;
+  right: 10px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--cor-balao, #0f9d58);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+  cursor: help;
+  white-space: nowrap;
+}
+
+.balao::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  right: 16px;
+  border: 5px solid transparent;
+  border-bottom: 0;
+  border-top-color: var(--cor-balao, #0f9d58);
+}
+
+.balao-quente { --cor-balao: #d93025; }
+.balao-morno { --cor-balao: #e37400; }
+
+/* Imagem com fallback: sem foto, mostra o nome do veículo */
+.imagem {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  background: var(--imagem-vazia);
+}
+
+.imagem-vazia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--cor);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cor) 16%, var(--imagem-vazia)), var(--imagem-vazia));
+}
+
+/* Seletor de veículos */
+.seletor-fontes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 8px;
+}
+
+.seletor-fontes .atalho {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--borda);
+  background: transparent;
+  color: var(--suave);
+  cursor: pointer;
+}
+
+.seletor-fontes .atalho:hover { color: var(--texto); border-color: var(--suave); }
+
+.seletor-fontes .divisor {
+  width: 1px;
+  height: 20px;
+  background: var(--borda);
+  margin: 0 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  padding: 4px 12px 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.55;
+}
+
+.chip:has(input:checked) {
+  opacity: 1;
+  border-color: var(--cor);
+  background: color-mix(in srgb, var(--cor) 12%, transparent);
+}
+
+.chip input { accent-color: var(--cor); margin: 0; }
+
+/* Lista de notícias: cartões */
+.lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.noticia {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  background: var(--painel);
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.noticia:hover { border-color: var(--suave); transform: translateY(-1px); }
+.noticia .imagem { aspect-ratio: 16 / 9; }
+.noticia .corpo { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.noticia h3 { margin: 0; font-size: 0.95rem; line-height: 1.35; }
+.noticia .resumo {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--suave);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.selo {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--destaque);
+  border: 1px solid color-mix(in srgb, var(--destaque) 45%, transparent);
+}
+
+/* Lista de notícias: modo lista compacta */
+.lista.compacta { grid-template-columns: 1fr; gap: 0; }
+.lista.compacta .noticia {
+  flex-direction: row;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--borda);
+  border-radius: 0;
+  background: transparent;
+}
+.lista.compacta .noticia:hover { transform: none; background: color-mix(in srgb, var(--texto) 4%, transparent); }
+.lista.compacta .imagem { width: 112px; flex: none; border-radius: 6px; margin: 8px 0 8px 4px; }
+.lista.compacta .resumo { display: none; }
+
+.vazio { color: var(--suave); padding: 24px 0; text-align: center; grid-column: 1 / -1; }
+
+.mais {
+  display: block;
+  margin: 16px auto 4px;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: var(--painel);
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.mais:hover { border-color: var(--suave); }
+
+footer { padding: 16px 16px 24px; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 1.4rem; }
+  .busca { width: 100%; }
+  .destaques { grid-template-columns: 1fr; }
+  .lista.compacta .imagem { width: 84px; }
+}
