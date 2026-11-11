@@ -1,6 +1,7 @@
-const CORES = {
+// --- Notícias ---
+
+const CORES_FONTES = {
   "G1": "#e0352b",
-  "ge": "#0fa14c",
   "Folha": "#2f6fdb",
   "Estadão": "#8b5cf6",
   "Agência Brasil": "#0c9fb5",
@@ -9,30 +10,22 @@ const CORES = {
   "BBC Brasil": "#e38b00",
 };
 
-const POR_PAGINA = 30;
+const CORES_SECOES = {
+  politica: "#2f6fdb",
+  economia: "#0f9d58",
+  tecnologia: "#8b5cf6",
+  mundo: "#e38b00",
+  stf: "#c9a227",
+  stj: "#0c9fb5",
+  tjgo: "#0f9d58",
+  mp: "#e2408f",
+  mpgo: "#8b5cf6",
+  csmp: "#d6336c",
+};
+
 const RECARREGAR_MS = 10 * 60 * 1000;
 
-let dados = null;
-let categoriaAtual = "todas";
-let busca = "";
-let exibidas = POR_PAGINA;
-
-// Veículos exibidos na lista e modo da lista (a escolha fica salva no navegador)
-const CHAVE_OCULTOS = "fontes-ocultas";
-const CHAVE_MODO = "modo-lista";
-let ocultos = new Set();
-let modoLista = "cartoes";
-try {
-  const salvo = JSON.parse(localStorage.getItem(CHAVE_OCULTOS));
-  if (Array.isArray(salvo)) ocultos = new Set(salvo);
-  if (localStorage.getItem(CHAVE_MODO) === "lista") modoLista = "lista";
-} catch { /* sem localStorage: mostra tudo */ }
-
-function salvar(chave, valor) {
-  try {
-    localStorage.setItem(chave, valor);
-  } catch { /* ignora */ }
-}
+let noticias = null;
 
 function elemento(tag, classe, texto) {
   const el = document.createElement(tag);
@@ -50,35 +43,30 @@ function tempoRelativo(iso) {
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function dataCompleta(iso) {
-  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "full", timeStyle: "short" });
-}
-
-function semAcento(texto) {
-  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
-
 function etiquetaFonte(fonte) {
   const el = elemento("span", "fonte", fonte);
-  el.style.setProperty("--cor", CORES[fonte] || "#6b7280");
+  el.style.setProperty("--cor", CORES_FONTES[fonte] || "#6b7280");
   return el;
 }
 
-function linhaMeta(noticia, comFonte = true) {
+function linhaMeta(noticia) {
   const meta = elemento("div", "meta");
-  if (comFonte) meta.append(etiquetaFonte(noticia.fonte));
-  meta.append(elemento("span", "", dados.categorias[noticia.categoria]));
   const hora = elemento("time", "", tempoRelativo(noticia.data));
   hora.dateTime = noticia.data;
-  hora.title = dataCompleta(noticia.data);
-  meta.append(hora);
+  hora.title = new Date(noticia.data).toLocaleString("pt-BR", { dateStyle: "full", timeStyle: "short" });
+  meta.append(etiquetaFonte(noticia.fonte), hora);
+  if (noticia.veiculos > 1) {
+    const selo = elemento("span", "selo", `em ${noticia.veiculos} veículos`);
+    selo.title = `Assunto noticiado por ${noticia.veiculos} veículos diferentes`;
+    meta.append(selo);
+  }
   return meta;
 }
 
 function imagem(noticia) {
   const vazia = () => {
     const el = elemento("div", "imagem imagem-vazia", noticia.fonte);
-    el.style.setProperty("--cor", CORES[noticia.fonte] || "#6b7280");
+    el.style.setProperty("--cor", CORES_FONTES[noticia.fonte] || "#6b7280");
     el.setAttribute("aria-hidden", "true");
     return el;
   };
@@ -92,216 +80,598 @@ function imagem(noticia) {
   return img;
 }
 
-function link(noticia, conteudo) {
+function link(noticia, ...conteudo) {
   const a = elemento("a");
   a.href = noticia.link;
   a.target = "_blank";
   a.rel = "noopener";
-  a.append(conteudo);
+  a.append(...conteudo);
   return a;
 }
 
-function passaNosFiltros(noticia) {
-  if (categoriaAtual !== "todas" && noticia.categoria !== categoriaAtual) return false;
-  if (busca && !semAcento(`${noticia.titulo} ${noticia.resumo}`).includes(busca)) return false;
-  return true;
-}
+/** Primeira notícia da editoria: foto grande, resumo e links dos outros veículos. */
+function noticiaLider(noticia) {
+  const lider = elemento("article", "lider");
+  const corpo = elemento("div", "corpo");
+  const titulo = elemento("h3");
+  titulo.append(link(noticia, noticia.titulo));
+  corpo.append(linhaMeta(noticia), titulo);
+  if (noticia.resumo) corpo.append(elemento("p", "resumo", noticia.resumo));
 
-// --- Filtros ---
-
-function montarFiltros() {
-  const nav = document.getElementById("filtros");
-  nav.replaceChildren();
-  const contagem = {};
-  for (const n of dados.noticias) contagem[n.categoria] = (contagem[n.categoria] || 0) + 1;
-
-  const opcoes = [["todas", "Todas", dados.noticias.length], ...Object.entries(dados.categorias).map(([id, nome]) => [id, nome, contagem[id] || 0])];
-  for (const [id, nome, total] of opcoes) {
-    const botao = elemento("button", id === categoriaAtual ? "ativo" : "", nome);
-    botao.type = "button";
-    botao.append(elemento("span", "contagem", total));
-    botao.addEventListener("click", () => {
-      categoriaAtual = id;
-      exibidas = POR_PAGINA;
-      for (const b of nav.children) b.classList.toggle("ativo", b === botao);
-      renderizar();
-    });
-    nav.append(botao);
-  }
-}
-
-function montarSeletorFontes() {
-  const seletor = document.getElementById("seletor-fontes");
-  seletor.replaceChildren();
-
-  const atalho = (texto, acao) => {
-    const botao = elemento("button", "atalho", texto);
-    botao.type = "button";
-    botao.addEventListener("click", () => {
-      acao();
-      salvar(CHAVE_OCULTOS, JSON.stringify([...ocultos]));
-      montarSeletorFontes();
-      renderizarLista();
-    });
-    return botao;
-  };
-  seletor.append(
-    atalho("Todos", () => ocultos.clear()),
-    atalho("Nenhum", () => { ocultos = new Set(dados.fontes); }),
-    elemento("span", "divisor"),
-  );
-
-  for (const fonte of dados.fontes) {
-    const chip = elemento("label", "chip");
-    chip.style.setProperty("--cor", CORES[fonte] || "#6b7280");
-    const caixa = elemento("input");
-    caixa.type = "checkbox";
-    caixa.checked = !ocultos.has(fonte);
-    caixa.addEventListener("change", () => {
-      if (caixa.checked) ocultos.delete(fonte);
-      else ocultos.add(fonte);
-      salvar(CHAVE_OCULTOS, JSON.stringify([...ocultos]));
-      exibidas = POR_PAGINA;
-      renderizarLista();
-    });
-    chip.append(caixa, fonte);
-    seletor.append(chip);
-  }
-}
-
-function montarAlternador() {
-  const grupo = document.getElementById("modo-lista");
-  for (const botao of grupo.querySelectorAll("button")) {
-    botao.classList.toggle("ativo", botao.dataset.modo === modoLista);
-    botao.addEventListener("click", () => {
-      modoLista = botao.dataset.modo;
-      salvar(CHAVE_MODO, modoLista);
-      for (const b of grupo.children) b.classList.toggle("ativo", b === botao);
-      renderizarLista();
-    });
-  }
-}
-
-// --- Destaques ---
-
-function renderizarDestaques() {
-  const caixa = document.getElementById("destaques");
-  caixa.replaceChildren();
-  const destaques = dados.destaques.filter((d) => passaNosFiltros(dados.noticias[d.principal]));
-
-  if (!destaques.length) {
-    caixa.append(elemento("p", "vazio", "Nenhum assunto em destaque com esses filtros."));
-    return;
-  }
-
-  for (const d of destaques) {
-    const principal = dados.noticias[d.principal];
-    const card = elemento("article", "destaque");
-
-    const balao = elemento("span", "balao", `🔥 em ${d.veiculos} veículos`);
-    if (d.veiculos >= 4) balao.classList.add("balao-quente");
-    else if (d.veiculos === 3) balao.classList.add("balao-morno");
-    balao.title = `Assunto noticiado por ${d.veiculos} veículos diferentes nas últimas 24 horas`;
-
-    const corpo = elemento("div", "corpo");
-    const titulo = elemento("h3");
-    titulo.append(link(principal, principal.titulo));
-    corpo.append(linhaMeta(principal), titulo);
-    if (principal.resumo) corpo.append(elemento("p", "resumo", principal.resumo));
-
+  if (noticia.relacionadas.length) {
     const tambem = elemento("ul", "tambem");
-    for (const id of d.relacionadas) {
-      const n = dados.noticias[id];
+    for (const r of noticia.relacionadas) {
       const item = elemento("li");
-      item.append(etiquetaFonte(n.fonte), link(n, n.titulo));
+      const a = link(r, r.titulo);
+      a.title = r.titulo;
+      item.append(etiquetaFonte(r.fonte), a);
       tambem.append(item);
     }
     corpo.append(tambem);
+  }
+  lider.append(link(noticia, imagem(noticia)), corpo);
+  return lider;
+}
 
-    card.append(balao, link(principal, imagem(principal)), corpo);
-    caixa.append(card);
+function montarSecoes() {
+  const container = document.getElementById("secoes");
+  container.replaceChildren();
+  for (const secao of noticias.secoes) {
+    const painel = elemento("section", "painel secao");
+    painel.style.setProperty("--cor", CORES_SECOES[secao.id] || "#6b7280");
+    painel.append(elemento("h2", "", secao.nome));
+
+    const [primeira, ...demais] = secao.noticias;
+    if (!primeira) {
+      painel.append(elemento("p", "vazio", "Nenhuma notícia desta editoria agora."));
+    } else {
+      painel.append(noticiaLider(primeira));
+      const lista = elemento("ul", "outras");
+      for (const n of demais) {
+        const corpo = elemento("div", "corpo");
+        corpo.append(linhaMeta(n), elemento("h3", "", n.titulo));
+        const item = elemento("li");
+        item.append(link(n, imagem(n), corpo));
+        lista.append(item);
+      }
+      painel.append(lista);
+    }
+    container.append(painel);
   }
 }
 
-// --- Últimas notícias ---
+function itemJuridico(n) {
+  const item = elemento("li");
+  item.append(link(n, linhaMeta(n), elemento("h3", "", n.titulo)));
+  return item;
+}
 
-function cartaoNoticia(noticia) {
-  const corpo = elemento("div", "corpo");
-  const meta = linhaMeta(noticia);
-  if (noticia.veiculos_assunto) {
-    const selo = elemento("span", "selo", `em ${noticia.veiculos_assunto} veículos`);
-    selo.title = "Assunto noticiado por vários veículos nas últimas 24 horas";
-    meta.append(selo);
+/** Um painel por órgão (STF, STJ, TJGO, CSMP), com cinco notícias só em texto. */
+function montarJuridico() {
+  const container = document.getElementById("juridico");
+  container.replaceChildren();
+  for (const orgao of noticias.juridico || []) {
+    const painel = elemento("section", "painel secao");
+    painel.style.setProperty("--cor", CORES_SECOES[orgao.id] || "#6b7280");
+    painel.append(elemento("h2", "", orgao.nome));
+
+    if (!orgao.noticias.length) {
+      painel.append(elemento("p", "vazio", "Nenhuma notícia recente."));
+    } else {
+      const lista = elemento("ul", "juridicas");
+      orgao.noticias.forEach((n) => lista.append(itemJuridico(n)));
+      painel.append(lista);
+    }
+    container.append(painel);
   }
-  corpo.append(meta, elemento("h3", "", noticia.titulo));
-  if (noticia.resumo) corpo.append(elemento("p", "resumo", noticia.resumo));
-
-  const frag = document.createDocumentFragment();
-  frag.append(imagem(noticia), corpo);
-  const a = link(noticia, frag);
-  a.className = "noticia";
-  return a;
-}
-
-function renderizarLista() {
-  const lista = document.getElementById("lista");
-  lista.classList.toggle("compacta", modoLista === "lista");
-  lista.replaceChildren();
-
-  const filtradas = dados.noticias.filter((n) => !ocultos.has(n.fonte) && passaNosFiltros(n));
-  for (const noticia of filtradas.slice(0, exibidas)) lista.append(cartaoNoticia(noticia));
-  if (!filtradas.length) lista.append(elemento("p", "vazio", "Nenhuma notícia encontrada com esses filtros."));
-
-  const mais = document.getElementById("mais");
-  mais.hidden = filtradas.length <= exibidas;
-  mais.textContent = `Mostrar mais notícias (${filtradas.length - exibidas} restantes)`;
-
-  const nota = document.getElementById("nota-lista");
-  const ocultas = dados.fontes.filter((f) => ocultos.has(f)).length;
-  nota.textContent = `${filtradas.length} notícias das últimas 48 horas` + (ocultas ? `, sem ${ocultas} veículo(s) desmarcado(s).` : ".");
-}
-
-function renderizar() {
-  renderizarDestaques();
-  renderizarLista();
 }
 
 function atualizarSubtitulo() {
-  const falhas = dados.falhas.length ? ` · ${dados.falhas.length} feed(s) indisponível(is) agora` : "";
+  const falhas = noticias.falhas.length ? ` · ${noticias.falhas.length} feed(s) indisponível(is) agora` : "";
   document.getElementById("subtitulo").textContent =
-    `${dados.noticias.length} notícias de ${dados.fontes.length} veículos · atualizado ${tempoRelativo(dados.atualizado)}${falhas}`;
+    `As cinco principais de cada editoria, entre ${noticias.total} notícias de ${noticias.fontes.length} veículos · atualizado ${tempoRelativo(noticias.atualizado)}${falhas}`;
 }
 
-async function carregar() {
+async function carregarNoticias() {
   try {
     const resp = await fetch("/api/noticias", { cache: "no-cache" });
     if (!resp.ok) throw new Error(resp.status);
-    dados = await resp.json();
-  } catch (erro) {
-    if (!dados) document.getElementById("subtitulo").textContent = "Não foi possível carregar as notícias. Tente recarregar a página.";
+    noticias = await resp.json();
+  } catch {
+    if (!noticias) document.getElementById("subtitulo").textContent = "Não foi possível carregar as notícias. Tente recarregar a página.";
     return;
   }
-  // Veículos que saíram da lista não ficam "presos" como ocultos
-  ocultos = new Set([...ocultos].filter((f) => dados.fontes.includes(f)));
-  montarFiltros();
-  montarSeletorFontes();
+  montarSecoes();
+  montarJuridico();
   atualizarSubtitulo();
-  renderizar();
 }
 
-document.getElementById("busca").addEventListener("input", (evento) => {
-  busca = semAcento(evento.target.value.trim());
-  exibidas = POR_PAGINA;
-  if (dados) renderizar();
+// --- Agendas (STF, CSMP, Presidente, Senado e Câmara) ---
+
+function dataCurta(iso) {
+  const [, mes, dia] = iso.split("-");
+  return `${dia}/${mes}`;
+}
+
+/** "Hoje, quarta-feira, 11/11", "Amanhã, ...", "Ontem, ..." ou só o dia da semana e a data. */
+function descricaoDia(iso, hoje) {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const semana = new Date(Date.UTC(ano, mes - 1, dia, 12)).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
+  const texto = `${semana}, ${dataCurta(iso)}`;
+  const diferenca = Math.round((Date.parse(iso) - Date.parse(hoje)) / 86400000);
+  const relativo = { 0: "Hoje", 1: "Amanhã", [-1]: "Ontem" }[diferenca];
+  return relativo ? `${relativo}, ${texto}` : texto[0].toUpperCase() + texto.slice(1);
+}
+
+function periodo(inicio, fim) {
+  return inicio === fim ? `Em ${dataCurta(inicio)}` : `De ${dataCurta(inicio)} a ${dataCurta(fim)}`;
+}
+
+function linkExterno(href, ...conteudo) {
+  const a = elemento("a");
+  a.href = href;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.append(...conteudo);
+  return a;
+}
+
+function bloco(titulo, ...conteudo) {
+  const div = elemento("div", "agenda-bloco");
+  if (titulo) div.append(elemento("h3", "", titulo));
+  div.append(...conteudo);
+  return div;
+}
+
+/** Item de agenda: horário à esquerda, título (com link) e detalhes embaixo. */
+function compromisso({ hora = "", titulo, link: href, detalhes = [], etiqueta, cancelado = false, extra }) {
+  const li = elemento("li", cancelado ? "cancelado" : "");
+  const corpo = elemento("div");
+  const tituloEl = href ? linkExterno(href, titulo) : elemento("span", "", titulo);
+  tituloEl.classList.add("titulo");
+  const linhaTitulo = elemento("p", "titulo");
+  if (etiqueta) linhaTitulo.append(elemento("span", "etiqueta", etiqueta));
+  linhaTitulo.append(tituloEl);
+  corpo.append(linhaTitulo);
+  for (const d of detalhes.filter(Boolean)) corpo.append(elemento("p", "detalhe", d));
+  if (extra) corpo.append(extra);
+  li.append(elemento("span", "hora", hora), corpo);
+  return li;
+}
+
+function listaCompromissos(itens) {
+  const ul = elemento("ul", "compromissos");
+  itens.forEach((item) => ul.append(compromisso(item)));
+  return ul;
+}
+
+function rodapeLink(href, texto) {
+  const p = elemento("p", "agenda-data");
+  p.append(linkExterno(href, texto));
+  return p;
+}
+
+function agendaStf(stf, hoje) {
+  const partes = [];
+  // As sessões virtuais em andamento vêm primeiro: são o que está sendo julgado agora
+  if (stf.virtuais.length) {
+    const sessoes = stf.virtuais.map((v) => {
+      const div = elemento("div", "sessao");
+      const contagens = elemento("div", "contagens");
+      for (const [rotulo, total] of [["Plenário", v.plenario], ["1ª Turma", v.primeira_turma], ["2ª Turma", v.segunda_turma]]) {
+        const span = elemento("span", "", `${rotulo}: `);
+        span.append(elemento("strong", "", total));
+        contagens.append(span);
+      }
+      div.append(elemento("h4", "", `${periodo(v.inicio, v.fim)} · ${v.plenario + v.primeira_turma + v.segunda_turma} processos`), contagens);
+      const p = elemento("p");
+      p.append(linkExterno(v.link, "Ver os processos no portal do STF"));
+      div.append(p);
+      return div;
+    });
+    partes.push(bloco("Sessões virtuais em andamento", ...sessoes));
+  }
+  if (stf.presencial) {
+    const { data, sessoes } = stf.presencial;
+    for (const sessao of sessoes) {
+      const hora = sessao.inicio.split(" ")[1]?.replace(":", "h") || "";
+      partes.push(bloco(
+        `${sessao.colegiado} · ${sessao.descricao} · ${descricaoDia(data, hoje)}${hora ? `, ${hora}` : ""}`,
+        listaCompromissos(sessao.processos.map((p, i) => ({
+          hora: `${i + 1}.`,
+          titulo: p.processo,
+          link: p.link,
+          detalhes: [p.relator && `Relator: ${p.relator}`, p.tema],
+        }))),
+      ));
+    }
+    if (!sessoes.length) partes.push(bloco("Sessão presencial", elemento("p", "vazio", `Sem processos na pauta de ${dataCurta(data)}.`)));
+  }
+
+  if (!partes.length) partes.push(elemento("p", "vazio", "Nenhuma sessão de julgamento marcada."));
+  partes.push(rodapeLink(stf.presencial?.link || "https://portal.stf.jus.br/pauta/pesquisarCalendario.asp", "Calendário completo de julgamentos do STF"));
+  return partes;
+}
+
+const SITUACOES_CSMP = { andamento: "Em andamento", proxima: "Próxima", realizada: "Realizada" };
+
+function agendaCsmp(pautas) {
+  if (!pautas.length) return [elemento("p", "vazio", "Nenhuma pauta publicada.")];
+  return pautas.map((pauta) => {
+    const div = elemento("div", "sessao");
+    const titulo = elemento("h4");
+    titulo.append(
+      elemento("span", `etiqueta ${pauta.situacao === "andamento" ? "andamento" : ""}`, SITUACOES_CSMP[pauta.situacao]),
+      pauta.titulo,
+    );
+    div.append(titulo, elemento("p", "", periodo(pauta.inicio, pauta.fim)));
+    if (pauta.processos) {
+      const contagens = elemento("div", "contagens");
+      const span = elemento("span");
+      span.append(elemento("strong", "", pauta.processos), pauta.processos === 1 ? " processo na pauta" : " processos na pauta");
+      contagens.append(span);
+      div.append(contagens);
+    }
+    if (pauta.itens?.length) {
+      const ol = elemento("ol");
+      pauta.itens.forEach((item) => ol.append(elemento("li", "", item)));
+      div.append(ol);
+    }
+    if (pauta.relatores?.length) div.append(elemento("p", "", `Relatores: ${pauta.relatores.join(", ")}`));
+    const links = elemento("p");
+    if (pauta.pdf) links.append(linkExterno(pauta.pdf, "Ver a pauta completa (PDF)"), " · ");
+    links.append(linkExterno(pauta.link, "Publicação no portal do MPGO"));
+    div.append(links);
+    return div;
+  });
+}
+
+function agendaPresidente(agenda, hoje) {
+  if (!agenda.data) return [elemento("p", "vazio", "Nenhuma agenda publicada nos últimos dias."), rodapeLink(agenda.link, "Agenda no site do Planalto")];
+  let texto = descricaoDia(agenda.data, hoje);
+  if (agenda.data !== hoje) texto += " · a agenda de hoje ainda não foi publicada";
+  const partes = [elemento("p", "agenda-data", texto)];
+  if (agenda.aviso) partes.push(elemento("p", "agenda-data", agenda.aviso));
+  partes.push(agenda.compromissos.length
+    ? listaCompromissos(agenda.compromissos.map((c) => ({ hora: c.hora, titulo: c.titulo, detalhes: [c.local] })))
+    : elemento("p", "vazio", "Sem compromissos na agenda."));
+  partes.push(rodapeLink(agenda.link, "Agenda no site do Planalto"));
+  return partes;
+}
+
+function agendaSenado(agenda, hoje) {
+  if (!agenda.data) return [elemento("p", "vazio", "Nenhuma sessão ou reunião nos próximos dias."), rodapeLink(agenda.link, "Agenda no site do Senado")];
+  const partes = [elemento("p", "agenda-data", descricaoDia(agenda.data, hoje))];
+  if (agenda.plenario.length) {
+    partes.push(bloco("Plenário", listaCompromissos(agenda.plenario.map((s) => {
+      let extra;
+      if (s.materias.length) {
+        extra = elemento("ul", "materias");
+        for (const m of s.materias) {
+          const li = elemento("li");
+          li.append(linkExterno(m.link, m.identificacao), ` – ${m.ementa}`);
+          extra.append(li);
+        }
+        if (s.total_materias > s.materias.length) extra.append(elemento("li", "", `e mais ${s.total_materias - s.materias.length} matérias`));
+      }
+      return {
+        hora: s.hora,
+        titulo: s.tipo,
+        etiqueta: s.casa === "Congresso Nacional" ? "Congresso" : undefined,
+        detalhes: [s.situacao !== "Agendada" && s.situacao, s.descricao],
+        cancelado: /cancel/i.test(s.situacao),
+        extra,
+      };
+    }))));
+  }
+  if (agenda.comissoes.length) {
+    partes.push(bloco("Comissões", listaCompromissos(agenda.comissoes.map((r) => ({
+      hora: r.hora,
+      titulo: `${r.sigla} · ${r.titulo}`,
+      link: r.link,
+      detalhes: [r.nome, r.situacao !== "Agendada" && r.situacao],
+      cancelado: /cancel/i.test(r.situacao),
+    })))));
+  }
+  partes.push(rodapeLink(agenda.link, "Agenda completa no site do Senado"));
+  return partes;
+}
+
+function agendaCamara(agenda, hoje) {
+  if (!agenda.data) return [elemento("p", "vazio", "Nenhum evento nos próximos dias."), rodapeLink(agenda.link, "Agenda no site da Câmara")];
+  return [
+    elemento("p", "agenda-data", `${descricaoDia(agenda.data, hoje)} · ${agenda.eventos.length} eventos`),
+    listaCompromissos(agenda.eventos.map((e) => ({
+      hora: e.hora,
+      titulo: e.titulo || e.tipo,
+      link: e.link,
+      etiqueta: e.orgao === "PLEN" ? "Plenário" : e.orgao,
+      detalhes: [`${e.tipo}${e.orgao !== "PLEN" && e.nome_orgao ? ` · ${e.nome_orgao}` : ""}`, /cancel/i.test(e.situacao) && e.situacao],
+      cancelado: /cancel/i.test(e.situacao),
+    }))),
+    rodapeLink(agenda.link, "Agenda completa no site da Câmara"),
+  ];
+}
+
+const MONTAR_AGENDA = {
+  stf: agendaStf,
+  csmp: agendaCsmp,
+  presidente: agendaPresidente,
+  senado: agendaSenado,
+  camara: agendaCamara,
+};
+
+async function carregarAgendas() {
+  const nota = document.getElementById("nota-agendas");
+  let agendas;
+  try {
+    const resp = await fetch("/api/agendas", { cache: "no-cache" });
+    if (!resp.ok) throw new Error(resp.status);
+    agendas = await resp.json();
+  } catch {
+    nota.textContent = "Não foi possível carregar as agendas. Tente recarregar a página.";
+    return;
+  }
+  for (const painel of document.querySelectorAll("[data-agenda]")) {
+    const nome = painel.dataset.agenda;
+    const corpo = painel.querySelector(".agenda-corpo");
+    corpo.replaceChildren();
+    if (agendas[nome] == null) {
+      corpo.append(elemento("p", "vazio", "Não foi possível carregar esta agenda agora."));
+      continue;
+    }
+    corpo.append(...MONTAR_AGENDA[nome](agendas[nome], agendas.hoje));
+  }
+  nota.textContent = `O que está em julgamento e os compromissos do dia, direto das fontes oficiais · atualizado ${tempoRelativo(agendas.atualizado)}`;
+}
+
+// --- Cotações (mesmos gráficos do Projeto Site Cotações) ---
+
+const CORES = {
+  USD: "#2a7de1",
+  EUR: "#7b5cd6",
+  BTC: "#f2a900",
+  ETH: "#627eea",
+  TRX: "#e5342f",
+  USDT: "#26a17b",
+};
+
+const MOEDAS = ["USD", "EUR"];
+const CRIPTOS = ["BTC", "ETH", "TRX", "USDT"];
+
+const PERIODOS = {
+  anos5: { rotulo: "em 5 anos", recuar: (d) => d.setUTCFullYear(d.getUTCFullYear() - 5) },
+  ano: { rotulo: "em 1 ano", recuar: (d) => d.setUTCFullYear(d.getUTCFullYear() - 1) },
+  mes: { rotulo: "em 1 mês", recuar: (d) => d.setUTCMonth(d.getUTCMonth() - 1) },
+  semana: { rotulo: "em 1 semana", recuar: (d) => d.setUTCDate(d.getUTCDate() - 7) },
+  dia: { rotulo: "nas últimas 24h", recuar: (d) => d.setUTCDate(d.getUTCDate() - 1) },
+};
+
+const escuro = window.matchMedia("(prefers-color-scheme: dark)").matches;
+const corTexto = escuro ? "#e8eaf0" : "#1d2230";
+const corGrade = escuro ? "#1a2230" : "#e3e6eb";
+const corSuave = escuro ? "#9aa2b1" : "#4b5563";
+
+let cotacoes = null;
+let periodoAtual = "anos5";
+
+const NOTA_COTACOES = "Histórico diário dos últimos 5 anos, atualizado automaticamente.";
+
+// Cotações de hora em hora (filtro "1 dia"), recarregadas a cada 5 minutos
+const VALIDADE_INTRADIA_MS = 5 * 60 * 1000;
+let intradia = null;
+let momentoIntradia = 0;
+
+/** Série a exibir: de hora em hora no filtro "1 dia" (se disponível), senão diária. */
+function serie(ativo) {
+  if (periodoAtual === "dia" && intradia && intradia[ativo]?.valores.length) {
+    return intradia[ativo];
+  }
+  return recortar(cotacoes[ativo], periodoAtual);
+}
+
+async function carregarIntradia() {
+  if (intradia && Date.now() - momentoIntradia < VALIDADE_INTRADIA_MS) return;
+  const resposta = await fetch("/api/intradia");
+  if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+  intradia = await resposta.json();
+  momentoIntradia = Date.now();
+}
+
+/**
+ * Recorta a série para o período escolhido, contado a partir da última cotação.
+ * Inclui a última cotação anterior ao corte como ponto de partida, para que o
+ * gráfico faça sentido mesmo em fins de semana (dólar e euro).
+ */
+function recortar(info, periodo) {
+  const { datas, valores } = info;
+  const recuar = PERIODOS[periodo].recuar;
+  if (!recuar || !datas.length) return { datas, valores };
+
+  const corte = new Date(datas[datas.length - 1] + "T00:00:00Z");
+  recuar(corte);
+  const corteIso = corte.toISOString().slice(0, 10);
+
+  let inicio = datas.findIndex((d) => d >= corteIso);
+  if (inicio === -1) inicio = datas.length - 1;
+  if (datas[inicio] > corteIso && inicio > 0) inicio -= 1;
+  return { datas: datas.slice(inicio), valores: valores.slice(inicio) };
+}
+
+function eixoX(serieCurta) {
+  const eixo = { gridcolor: corGrade, tickformat: "%d/%m/%y", hoverformat: "%d/%m/%Y" };
+  if (periodoAtual === "dia" && intradia) {
+    eixo.tickformat = "%H:%M";
+    eixo.hoverformat = "%d/%m %H:%M";
+  } else if (serieCurta) {
+    eixo.tickformat = "%d/%m";
+    eixo.dtick = 24 * 60 * 60 * 1000; // um rótulo por dia
+  }
+  return eixo;
+}
+
+function layoutBase(extra = {}) {
+  return {
+    margin: { l: 70, r: 16, t: 36, b: 40 },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: corTexto, family: "system-ui, sans-serif" },
+    separators: ",.",
+    hovermode: "x unified",
+    // Fundo sólido na janela do mouse (o fundo do gráfico é transparente)
+    hoverlabel: {
+      bgcolor: escuro ? "#0a0e15" : "#ffffff",
+      bordercolor: escuro ? "#3a4252" : "#c9ced6",
+      font: { color: corTexto, size: 13, family: "system-ui, sans-serif" },
+    },
+    ...extra,
+  };
+}
+
+const configPlotly = { responsive: true, displaylogo: false };
+
+function formatarReal(valor) {
+  // Ativos baratos (ex.: Tron) precisam de mais casas decimais
+  const casas = valor < 10 ? 4 : 2;
+  return valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: casas,
+    maximumFractionDigits: casas,
+  });
+}
+
+function formatarData(texto) {
+  // Aceita "2026-09-29" ou "2026-09-29 14:00"
+  const [dia, hora] = texto.split(" ");
+  const [a, m, d] = dia.split("-");
+  return hora ? `${d}/${m}/${a} ${hora}` : `${d}/${m}/${a}`;
+}
+
+const VARIACOES = [["ano", "1 ano"], ["mes", "1 mês"], ["semana", "1 semana"], ["dia", "1 dia"]];
+
+/**
+ * Variação no último ano, mês, semana e dia, qualquer que seja o filtro escolhido.
+ * O "1 dia" usa as cotações de hora em hora quando já carregadas; senão, as diárias.
+ */
+function preencherVariacoes(ativo) {
+  const caixa = document.getElementById(`variacoes-${ativo}`);
+  if (!caixa) return;
+  caixa.replaceChildren();
+  for (const [periodo, rotulo] of VARIACOES) {
+    const horaria = periodo === "dia" && intradia?.[ativo]?.valores.length >= 2;
+    const { datas, valores } = horaria ? intradia[ativo] : recortar(cotacoes[ativo], periodo);
+    const item = elemento("div");
+    const valor = elemento("span", "valor", "–");
+    if (valores.length >= 2) {
+      const variacao = (valores[valores.length - 1] / valores[0] - 1) * 100;
+      valor.textContent = `${variacao >= 0 ? "+" : ""}${variacao.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+      valor.classList.add(variacao >= 0 ? "alta" : "baixa");
+      item.title = `De ${formatarReal(valores[0])} (${formatarData(datas[0])}) ` +
+        `para ${formatarReal(valores[valores.length - 1])} (${formatarData(datas[datas.length - 1])})`;
+    }
+    item.append(elemento("span", "rotulo", rotulo), valor);
+    caixa.append(item);
+  }
+}
+
+function montarGraficosIndividuais(idContainer, ativos) {
+  const container = document.getElementById(idContainer);
+  for (const ativo of ativos) {
+    const info = cotacoes[ativo];
+    if (!info || !info.valores.length) continue;
+
+    let grafico = document.getElementById(`grafico-${ativo}`);
+    if (!grafico) {
+      const painel = document.createElement("div");
+      painel.className = "painel";
+      grafico = document.createElement("div");
+      grafico.id = `grafico-${ativo}`;
+      grafico.className = "grafico";
+      const variacoes = document.createElement("div");
+      variacoes.id = `variacoes-${ativo}`;
+      variacoes.className = "variacoes";
+      variacoes.setAttribute("aria-label", `Variação do ${info.nome}`);
+      painel.append(grafico, variacoes);
+      container.appendChild(painel);
+    }
+    preencherVariacoes(ativo);
+
+    const { datas, valores } = serie(ativo);
+    const casas = valores[valores.length - 1] < 10 ? 4 : 2;
+    Plotly.react(grafico, [{
+      x: datas,
+      y: valores,
+      type: "scatter",
+      mode: datas.length > 40 ? "lines" : "lines+markers",
+      line: { color: CORES[ativo], width: 2 },
+      hovertemplate: `R$ %{y:,.${casas}f}<extra></extra>`,
+    }], layoutBase({
+      // Nome em destaque, com uma bolinha na cor do ativo
+      title: {
+        text: `<span style="color:${CORES[ativo]}">●</span> <b>${info.nome}</b> <span style="color:${corSuave}">(${ativo})</span>`,
+        font: { size: 20 },
+        x: 0.02,
+        y: 0.96,
+      },
+      // Valores na casa das centenas de milhares (bitcoin) precisam de mais espaço no eixo
+      margin: { l: Math.max(...valores) >= 100000 ? 96 : 76, r: 16, t: 48, b: 40 },
+      xaxis: eixoX(datas.length <= 10),
+      yaxis: { gridcolor: corGrade, tickprefix: "R$ ", tickformat: `,.${casas}f` },
+    }), configPlotly);
+  }
+}
+
+function montarGraficos() {
+  montarGraficosIndividuais("graficos-moedas", MOEDAS);
+  montarGraficosIndividuais("graficos-cripto", CRIPTOS);
+}
+
+document.getElementById("filtros").addEventListener("click", async (evento) => {
+  const botao = evento.target.closest("button[data-periodo]");
+  if (!botao || !cotacoes) return;
+  periodoAtual = botao.dataset.periodo;
+  document.querySelectorAll("#filtros button").forEach((b) => b.classList.toggle("ativo", b === botao));
+
+  const nota = document.getElementById("nota-cotacoes");
+  if (periodoAtual === "dia") {
+    nota.textContent = "Carregando cotações de hora em hora…";
+    try {
+      await carregarIntradia();
+      nota.textContent = "Últimas 24 horas, de hora em hora.";
+    } catch (erro) {
+      nota.textContent = `Não foi possível carregar as cotações de hora em hora (${erro.message}). Mostrando dados diários.`;
+    }
+    if (periodoAtual !== "dia") return; // o usuário trocou de filtro enquanto carregava
+  } else {
+    nota.textContent = NOTA_COTACOES;
+  }
+  montarGraficos();
 });
 
-document.getElementById("mais").addEventListener("click", () => {
-  exibidas += POR_PAGINA;
-  renderizarLista();
-});
+async function carregarCotacoes() {
+  const nota = document.getElementById("nota-cotacoes");
+  try {
+    const resposta = await fetch("/api/cotacoes");
+    if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+    cotacoes = await resposta.json();
+    montarGraficos();
+    nota.textContent = NOTA_COTACOES;
+  } catch (erro) {
+    nota.textContent = `Não foi possível carregar as cotações (${erro.message}).`;
+    return;
+  }
+  // As cotações de hora em hora deixam a variação de "1 dia" mais precisa
+  try {
+    await carregarIntradia();
+    [...MOEDAS, ...CRIPTOS].forEach(preencherVariacoes);
+  } catch { /* fica com a variação diária */ }
+}
 
-montarAlternador();
-carregar();
-setInterval(carregar, RECARREGAR_MS);
+carregarNoticias();
+carregarAgendas();
+carregarCotacoes();
+setInterval(carregarNoticias, RECARREGAR_MS);
+setInterval(carregarAgendas, RECARREGAR_MS);
 // Mantém o "há X min" em dia entre uma recarga e outra
-setInterval(() => dados && atualizarSubtitulo(), 60 * 1000);
+setInterval(() => noticias && atualizarSubtitulo(), 60 * 1000);

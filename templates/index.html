@@ -4,51 +4,84 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Notícias do Brasil</title>
-  <meta name="description" content="As principais notícias do Brasil reunidas dos maiores veículos do país.">
+  <meta name="description" content="As principais notícias do Brasil e as cotações do dólar, euro e criptomoedas em R$.">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <meta name="theme-color" content="#070b14">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>Principais notícias do Brasil</h1>
+    <h1>Principais notícias</h1>
     <p id="subtitulo">Carregando notícias…</p>
   </header>
 
   <main>
-    <div class="barra">
-      <nav id="filtros" class="filtros" aria-label="Editoria"></nav>
-      <input id="busca" class="busca" type="search" placeholder="Buscar notícias…" aria-label="Buscar notícias">
-    </div>
+    <div id="secoes" class="secoes"></div>
 
-    <section class="painel">
-      <div class="cabecalho-painel">
-        <h2>Em destaque</h2>
-      </div>
-      <p class="nota">Assuntos noticiados por vários veículos nas últimas 24 horas.</p>
-      <div id="destaques" class="destaques"></div>
+    <section class="juridico">
+      <h2>Notícias jurídicas</h2>
+      <p class="nota">As cinco principais sobre cada órgão, dos sites oficiais e da imprensa.</p>
+      <div id="juridico" class="grade-juridico"></div>
     </section>
 
-    <section class="painel">
-      <div class="cabecalho-painel">
-        <h2>Últimas notícias</h2>
-        <div id="modo-lista" class="alternador" role="group" aria-label="Como mostrar as notícias">
-          <button type="button" data-modo="cartoes" class="ativo">Cartões</button>
-          <button type="button" data-modo="lista">Lista</button>
-        </div>
+    <section class="agendas">
+      <h2>Agendas</h2>
+      <p id="nota-agendas" class="nota">Carregando agendas…</p>
+      <div class="grade-agendas grade-agendas-2">
+        <section class="painel secao agenda" data-agenda="stf" style="--cor: #c9a227">
+          <h2>Em julgamento no STF</h2>
+          <div class="agenda-corpo"></div>
+        </section>
+        <section class="painel secao agenda" data-agenda="csmp" style="--cor: #d6336c">
+          <h2>Em julgamento no CSMP do MPGO</h2>
+          <div class="agenda-corpo"></div>
+        </section>
       </div>
-      <div id="seletor-fontes" class="seletor-fontes" aria-label="Veículos exibidos"></div>
-      <p id="nota-lista" class="nota"></p>
-      <div id="lista" class="lista"></div>
-      <button type="button" id="mais" class="mais" hidden>Mostrar mais notícias</button>
+      <div class="grade-agendas grade-agendas-3">
+        <section class="painel secao agenda" data-agenda="presidente" style="--cor: #7b5cd6">
+          <h2>Presidente da República</h2>
+          <div class="agenda-corpo"></div>
+        </section>
+        <section class="painel secao agenda" data-agenda="senado" style="--cor: #2f6fdb">
+          <h2>Senado Federal</h2>
+          <div class="agenda-corpo"></div>
+        </section>
+        <section class="painel secao agenda" data-agenda="camara" style="--cor: #0f9d58">
+          <h2>Câmara dos Deputados</h2>
+          <div class="agenda-corpo"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="cotacoes">
+      <div class="cabecalho-cotacoes">
+        <div>
+          <h2>Cotações em R$</h2>
+          <p id="nota-cotacoes" class="nota">Carregando cotações…</p>
+        </div>
+        <nav id="filtros" class="filtros" aria-label="Período">
+          <button type="button" data-periodo="anos5" class="ativo">5 anos</button>
+          <button type="button" data-periodo="ano">1 ano</button>
+          <button type="button" data-periodo="mes">1 mês</button>
+          <button type="button" data-periodo="semana">1 semana</button>
+          <button type="button" data-periodo="dia">1 dia</button>
+        </nav>
+      </div>
+      <div id="graficos-moedas" class="grade grade-2"></div>
+      <div id="graficos-cripto" class="grade grade-4"></div>
     </section>
   </main>
 
   <footer>
-    Fontes: feeds RSS de G1, ge, Folha de S.Paulo, Estadão, Agência Brasil, CNN Brasil, Poder360 e BBC News Brasil.
-    Os títulos e resumos são dos próprios veículos; clique em uma notícia para ler a matéria completa no site original.
+    Notícias: feeds RSS de G1, Folha de S.Paulo, Estadão, Agência Brasil, CNN Brasil, Poder360 e BBC News Brasil.
+    As principais são os assuntos noticiados por mais veículos; os títulos e resumos são dos próprios veículos.
+    Notícias jurídicas: buscas no Google Notícias sobre STF, STJ, TJGO, Ministério Público, Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP).
+    Agendas: calendário de julgamentos do STF, pautas do CSMP publicadas pelo MPGO, agenda do Presidente no Planalto e dados abertos do Senado e da Câmara.
+    Cotações: Banco Central do Brasil (PTAX de venda, só dias úteis) e Binance (fechamento diário em UTC); o Tron é calculado como TRX/USDT × USDT/BRL.
+    No filtro "1 dia" as cotações são de hora em hora: criptos pela Binance, dólar e euro pelo Yahoo Finance (cotação de mercado, não a PTAX).
   </footer>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>

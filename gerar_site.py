@@ -10,7 +10,9 @@ from pathlib import Path
 
 from flask import render_template
 
+import agendas
 import coletor
+import cotacoes
 from app import app
 
 RAIZ = Path(__file__).parent
@@ -25,23 +27,33 @@ def gravar_json(nome, dados):
 
 def main():
     dados = coletor.coletar()
-    if len(dados["falhas"]) > MAXIMO_FALHAS * dados["feeds"] or not dados["noticias"]:
+    if len(dados["falhas"]) > MAXIMO_FALHAS * dados["feeds"] or not dados["total"]:
         # Sai com erro para o workflow não publicar um site quase vazio
         print(f"[gerar_site] {len(dados['falhas'])} de {dados['feeds']} feeds falharam")
         sys.exit(1)
+
+    # Uma cotação com falha não impede a publicação: o site só não mostra aquele gráfico
+    resumo = cotacoes.atualizar()
+    falhas = [ativo for ativo, qtd in resumo.items() if qtd is None]
+    if falhas:
+        print(f"[gerar_site] Sem cotações de: {', '.join(falhas)}")
 
     if SAIDA.exists():
         shutil.rmtree(SAIDA)
     shutil.copytree(RAIZ / "static", SAIDA / "static")
 
-    # O rewrite do firebase.json mapeia /api/noticias para este arquivo
+    # Os rewrites do firebase.json mapeiam /api/noticias, /api/agendas, /api/cotacoes e /api/intradia
+    # para estes arquivos. Uma agenda com falha vai como null e o site mostra o aviso no lugar dela
     gravar_json("noticias.json", dados)
+    gravar_json("agendas.json", agendas.coletar())
+    gravar_json("cotacoes.json", cotacoes.carregar())
+    gravar_json("intradia.json", cotacoes.buscar_intradia())
 
     with app.test_request_context():
         html = render_template("index.html")
     (SAIDA / "index.html").write_text(html, encoding="utf-8")
 
-    print(f"[gerar_site] {len(dados['noticias'])} notícias; site gerado em {SAIDA}")
+    print(f"[gerar_site] {dados['total']} notícias; site gerado em {SAIDA}")
 
 
 if __name__ == "__main__":

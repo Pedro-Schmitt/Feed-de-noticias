@@ -4,6 +4,9 @@
     "cleanUrls": true,
     "rewrites": [
       { "source": "/api/noticias", "destination": "/noticias.json" },
+      { "source": "/api/agendas", "destination": "/agendas.json" },
+      { "source": "/api/cotacoes", "destination": "/cotacoes.json" },
+      { "source": "/api/intradia", "destination": "/intradia.json" },
       { "source": "/favicon.ico", "destination": "/static/favicon-32.png" }
     ],
     "headers": [

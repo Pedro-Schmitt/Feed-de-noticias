@@ -13,11 +13,18 @@ import requests
 
 TIMEOUT = 20
 JANELA = timedelta(hours=48)  # notícias mais antigas que isso ficam de fora
-JANELA_DESTAQUES = timedelta(hours=24)
+JANELA_RECENTES = timedelta(hours=24)  # na escolha das principais, as das últimas 24h vêm antes
 MAX_POR_FEED = 40
-MAX_DESTAQUES = 8
+POR_SECAO = 5
 TAMANHO_RESUMO = 240
 
+# Editorias exibidas no site, na ordem da página
+SECOES = ["politica", "economia", "tecnologia", "mundo"]
+
+# Esportes não aparece no site: as notícias dessa editoria são descartadas
+IGNORADAS = {"esportes"}
+
+# Todas as editorias reconhecidas, para classificar as notícias dos feeds gerais
 CATEGORIAS = {
     "politica": "Política",
     "economia": "Economia",
@@ -34,25 +41,17 @@ FEEDS = [
     ("G1", "politica", "https://g1.globo.com/rss/g1/politica/"),
     ("G1", "economia", "https://g1.globo.com/rss/g1/economia/"),
     ("G1", "mundo", "https://g1.globo.com/rss/g1/mundo/"),
-    ("G1", "saude", "https://g1.globo.com/rss/g1/saude/"),
     ("G1", "tecnologia", "https://g1.globo.com/rss/g1/tecnologia/"),
-    ("ge", "esportes", "https://ge.globo.com/rss/ge/"),
     ("Folha", "politica", "https://feeds.folha.uol.com.br/poder/rss091.xml"),
     ("Folha", "economia", "https://feeds.folha.uol.com.br/mercado/rss091.xml"),
     ("Folha", "mundo", "https://feeds.folha.uol.com.br/mundo/rss091.xml"),
-    ("Folha", "esportes", "https://feeds.folha.uol.com.br/esporte/rss091.xml"),
-    ("Folha", "saude", "https://feeds.folha.uol.com.br/equilibrioesaude/rss091.xml"),
     ("Folha", "tecnologia", "https://feeds.folha.uol.com.br/tec/rss091.xml"),
     ("Estadão", "politica", "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/politica/"),
     ("Estadão", "economia", "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/economia/"),
     ("Estadão", "mundo", "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/internacional/"),
-    ("Estadão", "esportes", "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/esportes/"),
-    ("Estadão", "brasil", "https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/brasil/"),
     ("Agência Brasil", "politica", "https://agenciabrasil.ebc.com.br/rss/politica/feed.xml"),
     ("Agência Brasil", "economia", "https://agenciabrasil.ebc.com.br/rss/economia/feed.xml"),
     ("Agência Brasil", "mundo", "https://agenciabrasil.ebc.com.br/rss/internacional/feed.xml"),
-    ("Agência Brasil", "esportes", "https://agenciabrasil.ebc.com.br/rss/esportes/feed.xml"),
-    ("Agência Brasil", "saude", "https://agenciabrasil.ebc.com.br/rss/saude/feed.xml"),
     # Feeds gerais: a categoria é deduzida do endereço da notícia
     ("G1", None, "https://g1.globo.com/rss/g1/"),
     ("Folha", None, "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml"),
@@ -182,6 +181,9 @@ def buscar_feed(veiculo, categoria, url):
         data = _data(item)
         if not titulo or not link or data is None or data < limite:
             continue
+        categoria_noticia = categoria or _categoria_pela_url(link)
+        if categoria_noticia in IGNORADAS:
+            continue
         resumo = (
             _texto(item, "atom:subtitle")
             or _sem_html(_texto(item, "description"))
@@ -192,7 +194,7 @@ def buscar_feed(veiculo, categoria, url):
             "resumo": _resumir(resumo),
             "link": link,
             "fonte": veiculo,
-            "categoria": categoria or _categoria_pela_url(link),
+            "categoria": categoria_noticia,
             "data": data.isoformat(timespec="seconds"),
             "imagem": _imagem(item),
         })
@@ -201,7 +203,7 @@ def buscar_feed(veiculo, categoria, url):
     return noticias
 
 
-# --- Destaques: assuntos que aparecem em vários veículos ao mesmo tempo ---
+# --- Principais: os assuntos noticiados por mais veículos, em cada editoria ---
 
 def _palavras(titulo):
     sem_acento = unicodedata.normalize("NFKD", titulo.lower()).encode("ascii", "ignore").decode()
@@ -216,13 +218,10 @@ def _mesmo_assunto(a, b):
 
 
 def agrupar_assuntos(noticias):
-    """Junta notícias recentes de veículos diferentes que tratam do mesmo assunto."""
-    limite = datetime.now(timezone.utc) - JANELA_DESTAQUES
-    recentes = [
-        i for i, n in enumerate(noticias) if datetime.fromisoformat(n["data"]) >= limite
-    ]
-    palavras = {i: _palavras(noticias[i]["titulo"]) for i in recentes}
-    pai = {i: i for i in recentes}
+    """Junta as notícias de veículos diferentes que tratam do mesmo assunto.
+    Devolve uma lista de grupos (listas de índices); notícias sem par ficam sozinhas."""
+    palavras = [_palavras(n["titulo"]) for n in noticias]
+    pai = list(range(len(noticias)))
 
     def raiz(i):
         while pai[i] != i:
@@ -230,45 +229,156 @@ def agrupar_assuntos(noticias):
             i = pai[i]
         return i
 
-    for pos, i in enumerate(recentes):
-        for j in recentes[pos + 1:]:
+    for i in range(len(noticias)):
+        for j in range(i + 1, len(noticias)):
             if noticias[i]["fonte"] != noticias[j]["fonte"] and _mesmo_assunto(palavras[i], palavras[j]):
                 pai[raiz(j)] = raiz(i)
 
     grupos = {}
-    for i in recentes:
+    for i in range(len(noticias)):
         grupos.setdefault(raiz(i), []).append(i)
-    return [g for g in grupos.values() if len({noticias[i]["fonte"] for i in g}) >= 2]
+    return list(grupos.values())
 
 
-def escolher_destaques(noticias):
-    destaques = []
-    for grupo in agrupar_assuntos(noticias):
-        # Uma notícia por veículo (a mais recente), começando pela que tem foto e resumo
-        por_fonte = {}
-        for i in sorted(grupo, key=lambda i: noticias[i]["data"], reverse=True):
-            por_fonte.setdefault(noticias[i]["fonte"], i)
-        ids = sorted(
-            por_fonte.values(),
-            key=lambda i: (noticias[i]["imagem"] is not None, len(noticias[i]["resumo"])),
-            reverse=True,
-        )
-        for i in grupo:
-            noticias[i]["veiculos_assunto"] = len(por_fonte)
-        destaques.append({
-            "principal": ids[0],
-            "relacionadas": ids[1:],
-            "veiculos": len(por_fonte),
-            "data": max(noticias[i]["data"] for i in grupo),
+def _candidato(noticias, grupo, opcoes, limite):
+    """Resume um assunto: (chave de ordenação, notícia exibida, {veículo: notícia}).
+
+    Vale mais o assunto noticiado por mais veículos; no empate, o mais recente.
+    Assuntos com notícia depois de `limite` vêm antes dos mais antigos.
+    """
+    # Uma notícia por veículo (a mais recente)
+    por_fonte = {}
+    for i in sorted(grupo, key=lambda i: noticias[i]["data"], reverse=True):
+        por_fonte.setdefault(noticias[i]["fonte"], i)
+    # A notícia exibida sai de `opcoes`: de preferência de um veículo de FONTES_PREFERIDAS
+    # (só as buscas jurídicas misturam sites pequenos), depois com foto e resumo
+    principal = max(
+        opcoes,
+        key=lambda i: (
+            noticias[i]["fonte"] in FONTES_PREFERIDAS,
+            noticias[i]["imagem"] is not None,
+            bool(noticias[i]["resumo"]),
+            noticias[i]["data"],
+        ),
+    )
+    mais_recente = max(noticias[i]["data"] for i in grupo)
+    return (mais_recente >= limite, len(por_fonte), mais_recente), principal, por_fonte
+
+
+def _montar(noticias, principal, por_fonte):
+    fonte = noticias[principal]["fonte"]
+    return {
+        **{k: v for k, v in noticias[principal].items() if k != "categoria"},
+        "veiculos": len(por_fonte),
+        "relacionadas": [
+            {k: noticias[i][k] for k in ("fonte", "titulo", "link")}
+            for f, i in por_fonte.items() if f != fonte
+        ],
+    }
+
+
+def escolher_principais(noticias):
+    """As POR_SECAO notícias principais de cada editoria em SECOES.
+    Cada assunto aparece em uma editoria só (a primeira de SECOES em que ele entra)."""
+    limite = (datetime.now(timezone.utc) - JANELA_RECENTES).isoformat()
+    grupos = agrupar_assuntos(noticias)
+    usados = set()
+    secoes = []
+    for secao in SECOES:
+        candidatos = []
+        for g, grupo in enumerate(grupos):
+            da_secao = [i for i in grupo if noticias[i]["categoria"] == secao]
+            if g not in usados and da_secao:
+                candidatos.append((g, *_candidato(noticias, grupo, da_secao, limite)))
+
+        candidatos.sort(key=lambda c: c[1], reverse=True)
+        escolhidas = []
+        for g, _, principal, por_fonte in candidatos[:POR_SECAO]:
+            usados.add(g)
+            escolhidas.append(_montar(noticias, principal, por_fonte))
+        secoes.append({"id": secao, "nome": CATEGORIAS[secao], "noticias": escolhidas})
+    return secoes
+
+
+# --- Notícias jurídicas: buscas no Google Notícias, que junta sites oficiais e imprensa ---
+
+GOOGLE_NOTICIAS = "https://news.google.com/rss/search"
+
+# (id, nome, busca). O "when:" limita a idade das notícias; o CSMP publica pouco,
+# por isso olha um período bem maior
+JURIDICO = [
+    ("stf", "STF", "STF when:2d"),
+    ("stj", "STJ", "STJ when:3d"),
+    ("tjgo", "TJGO", '(TJGO OR "TJ-GO" OR "Tribunal de Justiça de Goiás") when:7d'),
+    ("mp", "Ministério Público", '"Ministério Público" when:2d'),
+    ("mpgo", "MPGO", '(MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "Ministério Público do Estado de Goiás") when:7d'),
+    ("csmp", "CSMP do MPGO",
+     '("Conselho Superior" OR CSMP) (MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "MP de Goiás") when:60d'),
+]
+
+# Posts de redes sociais aparecem na busca, mas não são notícias
+FONTES_IGNORADAS = {"Instagram", "Facebook", "YouTube", "X", "TikTok", "LinkedIn"}
+
+# Quando vários veículos dão o mesmo assunto, mostra a versão de um destes
+# (nomes como aparecem no Google Notícias); os feeds RSS do site já são todos daqui
+FONTES_PREFERIDAS = {
+    # Sites oficiais
+    "STF", "stf noticias", "Supremo Tribunal Federal", "STJ", "Superior Tribunal de Justiça",
+    "Tribunal de Justiça do Estado de Goiás", "Portal MPGO", "Portal CNJ",
+    "Ministério Público Federal", "MPF", "CNMP", "Conselho Nacional do Ministério Público",
+    # Imprensa jurídica
+    "Consultor Jurídico", "Migalhas", "JOTA Info", "Rota Jurídica",
+    # Grandes veículos
+    "G1", "O GLOBO", "Folha de S.Paulo", "Estadão", "CNN Brasil", "UOL Notícias",
+    "Agência Brasil", "Poder360", "BBC News Brasil", "Valor Econômico", "VEJA",
+    "Correio Braziliense", "Jornal Opção", "O Popular", "Mais Goiás", "A Redação",
+}
+
+
+def buscar_google_noticias(busca):
+    resp = requests.get(
+        GOOGLE_NOTICIAS,
+        params={"q": busca, "hl": "pt-BR", "gl": "BR", "ceid": "BR:pt-419"},
+        timeout=TIMEOUT,
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    resp.raise_for_status()
+    noticias = []
+    for item in _ler_xml(resp.content).iter("item"):
+        fonte = _texto(item, "source")
+        titulo = _sem_html(_texto(item, "title"))
+        if fonte and titulo.endswith(f" - {fonte}"):  # o Google acrescenta " - Veículo" ao título
+            titulo = titulo[: -len(fonte) - 3]
+        titulo = re.sub(r"(\s+#\w+)+$", "", titulo)  # hashtags no fim (ex.: "#Shorts")
+        link = _texto(item, "link")
+        data = _data(item)
+        if not titulo or not link or data is None or not fonte or fonte in FONTES_IGNORADAS:
+            continue
+        noticias.append({
+            "titulo": titulo,
+            "resumo": "",
+            "link": link,
+            "fonte": fonte,
+            "data": data.isoformat(timespec="seconds"),
+            "imagem": None,
         })
-    destaques.sort(key=lambda d: (d["veiculos"], d["data"]), reverse=True)
-    return destaques[:MAX_DESTAQUES]
+    noticias.sort(key=lambda n: n["data"], reverse=True)
+    return noticias
+
+
+def escolher_juridicas(noticias):
+    """As POR_SECAO principais de uma busca jurídica, pelo mesmo critério das editorias."""
+    limite = (datetime.now(timezone.utc) - JANELA_RECENTES).isoformat()
+    candidatos = [_candidato(noticias, grupo, grupo, limite) for grupo in agrupar_assuntos(noticias)]
+    candidatos.sort(key=lambda c: c[0], reverse=True)
+    return [_montar(noticias, principal, por_fonte) for _, principal, por_fonte in candidatos[:POR_SECAO]]
 
 
 def coletar():
-    """Busca todos os feeds em paralelo e devolve as notícias e os destaques."""
+    """Busca todos os feeds em paralelo e devolve as principais notícias de cada editoria."""
     with ThreadPoolExecutor(max_workers=10) as executor:
         futuros = [executor.submit(buscar_feed, *feed) for feed in FEEDS]
+        futuros_juridico = [executor.submit(buscar_google_noticias, busca) for _, _, busca in JURIDICO]
 
     noticias, vistos, falhas = [], set(), []
     for (veiculo, _, url), futuro in zip(FEEDS, futuros):
@@ -285,26 +395,32 @@ def coletar():
                 noticias.append(item)
 
     noticias.sort(key=lambda n: n["data"], reverse=True)
-    for i, noticia in enumerate(noticias):
-        noticia["id"] = i
-    destaques = escolher_destaques(noticias)
+
+    juridico = []
+    for (id_, nome, busca), futuro in zip(JURIDICO, futuros_juridico):
+        try:
+            escolhidas = escolher_juridicas(futuro.result())
+        except Exception as erro:
+            print(f"[coletor] Falha na busca jurídica {nome}: {erro}")
+            falhas.append(f"Google Notícias: {nome}")
+            escolhidas = []
+        juridico.append({"id": id_, "nome": nome, "noticias": escolhidas})
 
     return {
         "atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "categorias": CATEGORIAS,
         "fontes": sorted({veiculo for veiculo, _, _ in FEEDS}),
-        "feeds": len(FEEDS),
+        "total": len(noticias),
+        "feeds": len(FEEDS) + len(JURIDICO),
         "falhas": falhas,
-        "destaques": destaques,
-        "noticias": noticias,
+        "secoes": escolher_principais(noticias),
+        "juridico": juridico,
     }
 
 
 if __name__ == "__main__":
     dados = coletar()
-    print(f"{len(dados['noticias'])} notícias, {len(dados['falhas'])} feeds com falha")
-    for d in dados["destaques"]:
-        n = dados["noticias"][d["principal"]]
-        print(f"  [{d['veiculos']} veículos] {n['fonte']}: {n['titulo']}")
-        for i in d["relacionadas"]:
-            print(f"        - {dados['noticias'][i]['fonte']}: {dados['noticias'][i]['titulo']}")
+    print(f"{dados['total']} notícias, {len(dados['falhas'])} feeds com falha")
+    for secao in dados["secoes"] + dados["juridico"]:
+        print(f"\n== {secao['nome']}")
+        for n in secao["noticias"]:
+            print(f"  [{n['veiculos']}] {n['fonte']}: {n['titulo']}")
