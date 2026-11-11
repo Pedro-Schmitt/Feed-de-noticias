@@ -310,7 +310,7 @@ JURIDICO = [
     ("stf", "STF", "STF when:2d"),
     ("stj", "STJ", "STJ when:3d"),
     ("tjgo", "TJGO", '(TJGO OR "TJ-GO" OR "Tribunal de Justiça de Goiás") when:7d'),
-    ("mp", "Ministério Público", '"Ministério Público" when:2d'),
+    ("mp", "Ministério Público brasileiro", '"Ministério Público" when:2d'),
     ("mpgo", "MPGO", '(MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "Ministério Público do Estado de Goiás") when:7d'),
     ("csmp", "CSMP do MPGO",
      '("Conselho Superior" OR CSMP) (MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "MP de Goiás") when:60d'),

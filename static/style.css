@@ -250,6 +250,21 @@ a { color: inherit; text-decoration: none; }
 .juridicas li:last-child a { border-bottom: 0; }
 .juridicas a:hover { background: color-mix(in srgb, var(--texto) 5%, transparent); }
 .juridicas h3 { margin: 0; font-size: 0.9rem; line-height: 1.35; font-weight: 600; }
+/* Agenda do STF e do CSMP dentro do painel de notícias */
+.agenda-juridica {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--borda);
+}
+
+.titulo-agenda {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: var(--cor);
+}
+
+.agenda-juridica .agenda-corpo { max-height: 420px; }
+
 /* --- Agendas --- */
 
 .agendas { margin-top: 28px; }
@@ -261,7 +276,6 @@ a { color: inherit; text-decoration: none; }
   margin-top: 12px;
 }
 
-.grade-agendas-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grade-agendas-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .agenda > h2 { margin-bottom: 4px; }
@@ -432,7 +446,7 @@ footer { padding-bottom: 24px; }
 }
 
 @media (max-width: 1100px) {
-  .secoes, .grade-agendas-2, .grade-agendas-3 { grid-template-columns: 1fr; }
+  .secoes, .grade-agendas-3 { grid-template-columns: 1fr; }
   .grade-juridico { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

@@ -162,8 +162,16 @@ function montarJuridico() {
       orgao.noticias.forEach((n) => lista.append(itemJuridico(n)));
       painel.append(lista);
     }
+    // STF e CSMP mostram, abaixo das notícias, o que está em julgamento
+    if (orgao.id in MONTAR_AGENDA) {
+      const agenda = elemento("div", "agenda-juridica");
+      agenda.dataset.agenda = orgao.id;
+      agenda.append(elemento("h3", "titulo-agenda", "Em julgamento"), elemento("div", "agenda-corpo"));
+      painel.append(agenda);
+    }
     container.append(painel);
   }
+  preencherAgendas();
 }
 
 function atualizarSubtitulo() {
@@ -293,6 +301,44 @@ function agendaStf(stf, hoje) {
   return partes;
 }
 
+function agendaStj(stj, hoje) {
+  const partes = [];
+  if (stj.sessoes.length) {
+    const sessoes = stj.sessoes.map((s) => {
+      const div = elemento("div", "sessao");
+      const titulo = elemento("h4");
+      titulo.append(elemento("span", "etiqueta", s.tipo === "virtual" ? "Virtual" : "Presencial"), s.orgao);
+      const total = elemento("div", "contagens");
+      const span = elemento("span");
+      span.append(elemento("strong", "", s.total.toLocaleString("pt-BR")), s.total === 1 ? " processo" : " processos");
+      total.append(span);
+      div.append(titulo, elemento("p", "", s.tipo === "virtual" ? periodo(s.inicio, s.fim) : descricaoDia(s.inicio, hoje)), total);
+      const lista = listaCompromissos(s.processos.map((p, i) => ({
+        hora: `${i + 1}.`,
+        titulo: p.processo,
+        link: p.link,
+        detalhes: [p.relator && `Relator: ${p.relator}`],
+      })));
+      div.append(lista);
+      if (s.total > s.processos.length) {
+        div.append(elemento("p", "", `e mais ${(s.total - s.processos.length).toLocaleString("pt-BR")} processos nesta sessão`));
+      }
+      return div;
+    });
+    partes.push(bloco("Sessões em andamento", ...sessoes));
+  } else {
+    partes.push(elemento("p", "vazio", "Nenhuma sessão de julgamento em andamento."));
+  }
+  if (stj.proximas.length) {
+    partes.push(bloco("Próximas sessões presenciais", listaCompromissos(stj.proximas.map((p) => ({
+      hora: dataCurta(p.data),
+      titulo: p.orgao,
+    })))));
+  }
+  partes.push(rodapeLink("https://www.stj.jus.br/sites/portalp/Processos/Pautas-de-julgamento", "Pautas de julgamento no site do STJ"));
+  return partes;
+}
+
 const SITUACOES_CSMP = { andamento: "Em andamento", proxima: "Próxima", realizada: "Realizada" };
 
 function agendaCsmp(pautas) {
@@ -395,23 +441,19 @@ function agendaCamara(agenda, hoje) {
 
 const MONTAR_AGENDA = {
   stf: agendaStf,
+  stj: agendaStj,
   csmp: agendaCsmp,
   presidente: agendaPresidente,
   senado: agendaSenado,
   camara: agendaCamara,
 };
 
-async function carregarAgendas() {
-  const nota = document.getElementById("nota-agendas");
-  let agendas;
-  try {
-    const resp = await fetch("/api/agendas", { cache: "no-cache" });
-    if (!resp.ok) throw new Error(resp.status);
-    agendas = await resp.json();
-  } catch {
-    nota.textContent = "Não foi possível carregar as agendas. Tente recarregar a página.";
-    return;
-  }
+// Guardadas para redesenhar o STF e o CSMP quando os painéis jurídicos são recriados
+let agendas = null;
+
+/** Preenche cada elemento com data-agenda (os do bloco Agendas e os do STF e CSMP). */
+function preencherAgendas() {
+  if (!agendas) return;
   for (const painel of document.querySelectorAll("[data-agenda]")) {
     const nome = painel.dataset.agenda;
     const corpo = painel.querySelector(".agenda-corpo");
@@ -422,7 +464,20 @@ async function carregarAgendas() {
     }
     corpo.append(...MONTAR_AGENDA[nome](agendas[nome], agendas.hoje));
   }
-  nota.textContent = `O que está em julgamento e os compromissos do dia, direto das fontes oficiais · atualizado ${tempoRelativo(agendas.atualizado)}`;
+}
+
+async function carregarAgendas() {
+  const nota = document.getElementById("nota-agendas");
+  try {
+    const resp = await fetch("/api/agendas", { cache: "no-cache" });
+    if (!resp.ok) throw new Error(resp.status);
+    agendas = await resp.json();
+  } catch {
+    if (!agendas) nota.textContent = "Não foi possível carregar as agendas. Tente recarregar a página.";
+    return;
+  }
+  preencherAgendas();
+  nota.textContent = `Compromissos do dia, direto das fontes oficiais · atualizado ${tempoRelativo(agendas.atualizado)}`;
 }
 
 // --- Cotações (mesmos gráficos do Projeto Site Cotações) ---
