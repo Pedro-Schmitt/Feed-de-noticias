@@ -11,16 +11,18 @@ const CORES_FONTES = {
 };
 
 const CORES_SECOES = {
-  politica: "#2f6fdb",
+  politica: "#c9a227",
   economia: "#0f9d58",
-  tecnologia: "#8b5cf6",
-  mundo: "#e38b00",
+  tecnologia: "#0fb5d4",
+  mundo: "#e0352b",
   stf: "#c9a227",
   stj: "#0c9fb5",
   tjgo: "#0f9d58",
   mp: "#e2408f",
   mpgo: "#8b5cf6",
   csmp: "#d6336c",
+  ceres: "#0f9d58",
+  vale: "#c9a227",
 };
 
 const RECARREGAR_MS = 10 * 60 * 1000;
@@ -90,8 +92,8 @@ function link(noticia, ...conteudo) {
 }
 
 /** Primeira notícia da editoria: foto grande, resumo e links dos outros veículos. */
-function noticiaLider(noticia) {
-  const lider = elemento("article", "lider");
+function noticiaLider(noticia, comImagens = true) {
+  const lider = elemento("article", comImagens ? "lider" : "lider sem-imagem");
   const corpo = elemento("div", "corpo");
   const titulo = elemento("h3");
   titulo.append(link(noticia, noticia.titulo));
@@ -109,7 +111,8 @@ function noticiaLider(noticia) {
     }
     corpo.append(tambem);
   }
-  lider.append(link(noticia, imagem(noticia)), corpo);
+  if (comImagens) lider.append(link(noticia, imagem(noticia)));
+  lider.append(corpo);
   return lider;
 }
 
@@ -121,23 +124,27 @@ function montarSecoes() {
     painel.style.setProperty("--cor", CORES_SECOES[secao.id] || "#6b7280");
     painel.append(elemento("h2", "", secao.nome));
 
-    const [primeira, ...demais] = secao.noticias;
-    if (!primeira) {
-      painel.append(elemento("p", "vazio", "Nenhuma notícia desta editoria agora."));
-    } else {
-      painel.append(noticiaLider(primeira));
-      const lista = elemento("ul", "outras");
-      for (const n of demais) {
-        const corpo = elemento("div", "corpo");
-        corpo.append(linhaMeta(n), elemento("h3", "", n.titulo));
-        const item = elemento("li");
-        item.append(link(n, imagem(n), corpo));
-        lista.append(item);
-      }
-      painel.append(lista);
-    }
+    painel.append(...destaqueELista(secao.noticias, "Nenhuma notícia desta editoria agora."));
     container.append(painel);
   }
+}
+
+/**
+ * A primeira notícia em destaque e as outras em lista (editorias e Ceres).
+ * Sem imagens (Ceres: a busca não traz fotos), o quadro fica só com os textos.
+ */
+function destaqueELista(lista, textoVazio, comImagens = true) {
+  const [primeira, ...demais] = lista;
+  if (!primeira) return [elemento("p", "vazio", textoVazio)];
+  const outras = elemento("ul", "outras");
+  for (const n of demais) {
+    const corpo = elemento("div", "corpo");
+    corpo.append(linhaMeta(n), elemento("h3", "", n.titulo));
+    const item = elemento("li");
+    item.append(comImagens ? link(n, imagem(n), corpo) : link(n, corpo));
+    outras.append(item);
+  }
+  return [noticiaLider(primeira, comImagens), outras];
 }
 
 function itemJuridico(n) {
@@ -174,6 +181,19 @@ function montarJuridico() {
   preencherAgendas();
 }
 
+function montarRegional() {
+  const container = document.getElementById("regional");
+  container.replaceChildren();
+  for (const quadro of noticias.regional || []) {
+    const painel = elemento("section", "painel secao");
+    painel.style.setProperty("--cor", CORES_SECOES[quadro.id] || "#6b7280");
+    painel.append(elemento("h2", "", quadro.nome));
+    // A busca não traz fotos: o quadro fica só com os textos
+    painel.append(...destaqueELista(quadro.noticias, "Nenhuma notícia recente.", false));
+    container.append(painel);
+  }
+}
+
 function atualizarSubtitulo() {
   const falhas = noticias.falhas.length ? ` · ${noticias.falhas.length} feed(s) indisponível(is) agora` : "";
   document.getElementById("subtitulo").textContent =
@@ -191,6 +211,7 @@ async function carregarNoticias() {
   }
   montarSecoes();
   montarJuridico();
+  montarRegional();
   atualizarSubtitulo();
 }
 
@@ -564,10 +585,10 @@ function formatarData(texto) {
   return hora ? `${d}/${m}/${a} ${hora}` : `${d}/${m}/${a}`;
 }
 
-const VARIACOES = [["ano", "1 ano"], ["mes", "1 mês"], ["semana", "1 semana"], ["dia", "1 dia"]];
+const VARIACOES = [["anos5", "5 anos"], ["ano", "1 ano"], ["mes", "1 mês"], ["semana", "1 semana"], ["dia", "1 dia"]];
 
 /**
- * Variação no último ano, mês, semana e dia, qualquer que seja o filtro escolhido.
+ * Variação nos últimos 5 anos, ano, mês, semana e dia, qualquer que seja o filtro escolhido.
  * O "1 dia" usa as cotações de hora em hora quando já carregadas; senão, as diárias.
  */
 function preencherVariacoes(ativo) {

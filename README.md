@@ -1,4 +1,4 @@
-# Notícias do Brasil
+# Revista do Promotor
 
 Site em Python que mostra as **cinco principais notícias de Política, Economia, Tecnologia e Mundo**, a partir dos feeds RSS dos maiores veículos do país, e logo abaixo os **gráficos de cotação em R$** do dólar, euro, bitcoin, ethereum, Tron e Tether (filtros de 5 anos a 1 dia).
 
@@ -13,6 +13,10 @@ As agendas (`agendas.py`) vêm direto das fontes oficiais. O que está em julgam
 - **Câmara dos Deputados**: eventos do dia (Plenário primeiro), pela API de dados abertos da Câmara
 
 Senado e Câmara mostram o próximo dia com agenda quando não há nada hoje (ex.: fim de semana). Se uma fonte falhar, só aquele painel mostra um aviso.
+
+A área de notícias locais tem dois quadros, **Ceres** e **Vale do São Patrício**, cada um com as cinco principais notícias dos últimos 10 dias; o do Vale cobre as demais cidades (Rialma, Rubiataba, Goianésia, Itapaci, Itapuranga, Uruana e outras; lista em `CIDADES_VALE`, em `coletor.py`), também por buscas no Google Notícias.
+
+A página é dividida em quatro áreas: 1) Notícias Gerais, 2) Notícias Locais de Ceres e Vale do São Patrício, 3) Notícias do Mundo Jurídico e Agenda dos Órgãos e 4) Cotações das Principais Moedas.
 
 As principais de cada editoria são os assuntos noticiados por mais veículos (ex.: "em 4 veículos"); no empate, vale o mais recente, e os assuntos das últimas 24 horas vêm antes. A primeira notícia de cada editoria traz links para a versão dos outros veículos. Notícias de esportes ficam de fora.
 

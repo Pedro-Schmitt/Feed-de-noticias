@@ -316,7 +316,35 @@ JURIDICO = [
      '("Conselho Superior" OR CSMP) (MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "MP de Goiás") when:60d'),
 ]
 
-# Posts de redes sociais aparecem na busca, mas não são notícias
+# Notícias locais: um quadro para Ceres e outro para as demais cidades do Vale do São Patrício.
+# As buscas usam frases como "em Rialma" para não pegar notícias de Goiás inteiro que só
+# citam a cidade numa lista.
+# Cidades do Vale com nome único no país...
+CIDADES_VALE = [
+    "Rialma", "Rubiataba", "Goianésia", "Itapaci", "Itapuranga", "Uruana", "Carmo do Rio Verde", "São Luiz do Norte",
+]
+# ...e com nome repetido em outros estados (Barro Alto-BA, Ipiranga do Sul...), que só entram
+# junto com "Goiás". Santa Isabel e São Patrício ficam de fora: mesmo com "Goiás", a busca
+# trazia notícias de Santa Isabel (SP) e de outros lugares com esses nomes
+CIDADES_VALE_HOMONIMAS = ["Nova Glória", "Ipiranga de Goiás", "Barro Alto"]
+
+
+def _frases(cidades):
+    return " OR ".join(f'"em {c}" OR "de {c}"' for c in cidades)
+
+
+# (id, nome, buscas). O Vale usa duas buscas menores: uma só, com todas as cidades,
+# fica longa demais e o Google devolve poucos resultados
+REGIONAL = [
+    ("ceres", "Ceres", ['("em Ceres" OR "de Ceres" OR "Ceres-GO" OR "Ceres (GO)") when:10d']),
+    ("vale", "Vale do São Patrício", [
+        f'("Vale do São Patrício" OR {_frases(CIDADES_VALE)}) -"Goianésia do Pará" when:10d',
+        f"({_frases(CIDADES_VALE_HOMONIMAS)}) Goiás when:10d",
+    ]),
+]
+JANELA_REGIONAL = timedelta(days=10)  # o Google às vezes devolve notícias bem mais antigas
+
+
 FONTES_IGNORADAS = {"Instagram", "Facebook", "YouTube", "X", "TikTok", "LinkedIn"}
 
 # Quando vários veículos dão o mesmo assunto, mostra a versão de um destes
@@ -379,6 +407,9 @@ def coletar():
     with ThreadPoolExecutor(max_workers=10) as executor:
         futuros = [executor.submit(buscar_feed, *feed) for feed in FEEDS]
         futuros_juridico = [executor.submit(buscar_google_noticias, busca) for _, _, busca in JURIDICO]
+        futuros_regional = [
+            [executor.submit(buscar_google_noticias, busca) for busca in buscas] for _, _, buscas in REGIONAL
+        ]
 
     noticias, vistos, falhas = [], set(), []
     for (veiculo, _, url), futuro in zip(FEEDS, futuros):
@@ -406,6 +437,23 @@ def coletar():
             escolhidas = []
         juridico.append({"id": id_, "nome": nome, "noticias": escolhidas})
 
+    # Uma notícia que sai nas duas buscas fica só no quadro de Ceres (o primeiro)
+    regional, vistos_regional = [], set()
+    limite_regional = (datetime.now(timezone.utc) - JANELA_REGIONAL).isoformat()
+    for (id_, nome, _), futuros_quadro in zip(REGIONAL, futuros_regional):
+        itens = []
+        for futuro in futuros_quadro:
+            try:
+                for n in futuro.result():
+                    if n["data"] >= limite_regional and n["link"] not in vistos_regional:
+                        vistos_regional.add(n["link"])
+                        itens.append(n)
+            except Exception as erro:
+                print(f"[coletor] Falha na busca regional {nome}: {erro}")
+                falhas.append(f"Google Notícias: {nome}")
+        itens.sort(key=lambda n: n["data"], reverse=True)
+        regional.append({"id": id_, "nome": nome, "noticias": escolher_juridicas(itens)})
+
     return {
         "atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "fontes": sorted({veiculo for veiculo, _, _ in FEEDS}),
@@ -414,13 +462,14 @@ def coletar():
         "falhas": falhas,
         "secoes": escolher_principais(noticias),
         "juridico": juridico,
+        "regional": regional,
     }
 
 
 if __name__ == "__main__":
     dados = coletar()
     print(f"{dados['total']} notícias, {len(dados['falhas'])} feeds com falha")
-    for secao in dados["secoes"] + dados["juridico"]:
+    for secao in dados["secoes"] + dados["juridico"] + dados["regional"]:
         print(f"\n== {secao['nome']}")
         for n in secao["noticias"]:
             print(f"  [{n['veiculos']}] {n['fonte']}: {n['titulo']}")

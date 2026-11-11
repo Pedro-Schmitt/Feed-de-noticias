@@ -53,13 +53,13 @@ body::before {
   pointer-events: none;
 }
 
-header, main, footer {
+body > header, main, footer {
   max-width: 1760px;
   margin: 0 auto;
   padding: 0 16px;
 }
 
-header { padding-top: 24px; }
+body > header { padding-top: 24px; }
 h1 { margin: 0 0 4px; font-size: 1.7rem; }
 h2 { margin: 0 0 4px; font-size: 1.1rem; }
 #subtitulo, .nota, footer { color: var(--suave); font-size: 0.9rem; }
@@ -76,13 +76,49 @@ a { color: inherit; text-decoration: none; }
   padding: 14px 16px;
 }
 
+/* --- As quatro áreas do site --- */
+
+.area-numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--cor-area);
+  font-weight: 700;
+}
+
+/* Cada área é um bloco com fundo levemente colorido e faixa de cor no topo */
+.area {
+  margin-top: 28px;
+  padding: 20px 20px 24px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--cor-area) 30%, var(--borda));
+  border-top: 6px solid var(--cor-area);
+  background: color-mix(in srgb, var(--cor-area) 6%, transparent);
+}
+
+.area-cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.area-cabecalho > div { flex: 1; min-width: 240px; }
+.area-cabecalho h2 { margin: 0 0 2px; font-size: 1.6rem; color: var(--cor-area); }
+.area-numero { width: 40px; height: 40px; font-size: 1.2rem; flex: none; }
+
+.subtitulo-area { margin: 22px 0 2px; font-size: 1.15rem; }
+.area-cabecalho + .subtitulo-area { margin-top: 0; }
+
 /* --- Editorias: cinco notícias principais de cada --- */
 
 .secoes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  margin-top: 20px;
 }
 
 .secao { border-top: 3px solid var(--cor); }
@@ -224,8 +260,10 @@ a { color: inherit; text-decoration: none; }
 
 /* --- Notícias jurídicas: um painel por órgão --- */
 
-.juridico { margin-top: 28px; }
-.juridico > h2, .cabecalho-cotacoes h2 { font-size: 1.4rem; }
+
+/* Ceres e Vale do São Patrício: um quadro no formato das editorias, centralizado */
+.lider.sem-imagem { grid-template-columns: 1fr; }
+.lider.sem-imagem h3 { font-size: 1.3rem; }
 
 .grade-juridico {
   display: grid;
@@ -267,8 +305,6 @@ a { color: inherit; text-decoration: none; }
 
 /* --- Agendas --- */
 
-.agendas { margin-top: 28px; }
-.agendas > h2 { font-size: 1.4rem; }
 
 .grade-agendas {
   display: grid;
@@ -374,17 +410,9 @@ a { color: inherit; text-decoration: none; }
 
 /* --- Cotações --- */
 
-.cotacoes { margin-top: 28px; }
 
-.cabecalho-cotacoes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
 
-.cabecalho-cotacoes h2 { font-size: 1.4rem; }
+
 
 .filtros {
   display: flex;
@@ -422,10 +450,10 @@ a { color: inherit; text-decoration: none; }
 
 .grafico { width: 100%; height: 280px; }
 
-/* Variação no último ano, mês, semana e dia, abaixo de cada gráfico */
+/* Variação nos últimos 5 anos, ano, mês, semana e dia, abaixo de cada gráfico */
 .variacoes {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   margin-top: 6px;
   padding-top: 10px;
@@ -452,6 +480,8 @@ footer { padding-bottom: 24px; }
 
 @media (max-width: 640px) {
   h1 { font-size: 1.4rem; }
+  .area { padding: 14px 12px 18px; }
+  .area-cabecalho h2 { font-size: 1.3rem; }
   .grade-2, .grade-4, .grade-juridico { grid-template-columns: 1fr; }
   .lider { grid-template-columns: 1fr; }
   .outras .imagem { width: 84px; }
