@@ -56,6 +56,8 @@ def main():
         regional.gerar(SAIDA)
     except Exception as erro:
         print(f"[gerar_site] Falha nas notícias por região: {erro}")
+        # O motivo vai publicado junto: o log do GitHub Actions só abre logado
+        gravar_json("regional-erro.json", {"erro": f"{type(erro).__name__}: {erro}"[:500]})
 
     with app.test_request_context():
         html = render_template("index.html")
