@@ -288,7 +288,6 @@ a { color: inherit; text-decoration: none; }
 .grade-juridico {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  align-items: start;  /* cada quadro com a própria altura, sem sobra nos mais curtos */
   gap: 24px;
   margin: 4px 0 32px;
 }
@@ -300,7 +299,6 @@ a { color: inherit; text-decoration: none; }
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 3fr) minmax(0, 3fr);
   gap: 24px;
-  align-items: start;
 }
 
 .painel-interno { background: var(--painel); backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -381,9 +379,17 @@ a { color: inherit; text-decoration: none; }
 .agenda-juridica .agenda-corpo { max-height: 420px; }
 .agenda-juridica[data-agenda="stf"] .agenda-corpo { max-height: 340px; }
 
+/* Quadros de uma mesma linha sempre com a mesma altura, sem sobra nos mais curtos: a agenda do STF
+   e a lista de editais não definem a altura da linha (contain: size), só ocupam o espaço que há
+   e rolam por dentro */
+.grade-juridico > .painel, .mpgo-colunas > .editais { display: flex; flex-direction: column; }
+.grade-juridico > .painel-mpgo { display: block; }
+.agenda-juridica[data-agenda="stf"] { flex: 1; display: flex; flex-direction: column; min-height: 260px; }
+.agenda-juridica[data-agenda="stf"] .agenda-corpo,
+.mpgo-colunas > .editais .editais-lista { flex: 1 1 0; min-height: 200px; max-height: none; contain: size; overflow-y: auto; }
+
 /* Editais como coluna própria no quadro do MPGO */
 .mpgo-colunas > .editais { margin-top: 0; padding-top: 0; border-top: 0; }
-.mpgo-colunas > .editais .editais-lista { max-height: 560px; }
 
 /* --- Topo: título e switch de tema --- */
 
