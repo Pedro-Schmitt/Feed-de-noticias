@@ -235,6 +235,8 @@ function montarJuridico() {
     const comoOrgao = orgao.id === "stf" || orgao.id === "csmp";
     const lista_ = comoOrgao ? orgao.noticias.slice(0, 3) : orgao.noticias;
     if (comoOrgao) painel.append(elemento("h3", "titulo-agenda", "Principais notícias"));
+    // No MPGO, a coluna das notícias tem título, como a dos editais ao lado
+    if (orgao.id === "mpgo") painel.append(elemento("h3", "titulo-agenda", "Notícias"));
     if (!lista_.length) {
       painel.append(elemento("p", "vazio", "Nenhuma notícia recente."));
     } else {
