@@ -27,6 +27,7 @@
       "site": "feed-de-atualizacoes---pedro",
       "public": "public",
       "redirects": [
+        { "source": "/", "destination": "https://revista-do-promotor.web.app/", "type": 301 },
         { "source": "/:caminho*", "destination": "https://revista-do-promotor.web.app/:caminho", "type": 301 }
       ]
     }
