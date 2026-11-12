@@ -1074,7 +1074,7 @@ document.getElementById("filtro-jurisprudencia").addEventListener("click", (even
   if (noticias) montarInformativos();
 });
 
-// Switch de tema: marcado = escuro. A escolha fica salva; sem escolha, segue o sistema
+// Switch de tema: marcado = escuro. A escolha fica salva; sem escolha, fica o claro
 const switchTema = document.getElementById("alternar-tema");
 switchTema.checked = temaEscuro();
 switchTema.addEventListener("change", () => {
