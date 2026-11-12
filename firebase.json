@@ -1,24 +1,34 @@
 {
-  "hosting": {
-    "public": "public",
-    "cleanUrls": true,
-    "rewrites": [
-      { "source": "/api/noticias", "destination": "/noticias.json" },
-      { "source": "/api/agendas", "destination": "/agendas.json" },
-      { "source": "/api/promotorias", "destination": "/promotorias.json" },
-      { "source": "/api/cotacoes", "destination": "/cotacoes.json" },
-      { "source": "/api/intradia", "destination": "/intradia.json" },
-      { "source": "/favicon.ico", "destination": "/static/favicon-32.png" }
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(json|html|js|css)",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
-      },
-      {
-        "source": "/api/**",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
-      }
-    ]
-  }
+  "hosting": [
+    {
+      "site": "revista-do-promotor",
+      "public": "public",
+      "cleanUrls": true,
+      "rewrites": [
+        { "source": "/api/noticias", "destination": "/noticias.json" },
+        { "source": "/api/agendas", "destination": "/agendas.json" },
+        { "source": "/api/promotorias", "destination": "/promotorias.json" },
+        { "source": "/api/cotacoes", "destination": "/cotacoes.json" },
+        { "source": "/api/intradia", "destination": "/intradia.json" },
+        { "source": "/favicon.ico", "destination": "/static/favicon-32.png" }
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(json|html|js|css)",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
+          "source": "/api/**",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        }
+      ]
+    },
+    {
+      "site": "feed-de-atualizacoes---pedro",
+      "public": "public",
+      "redirects": [
+        { "source": "/:caminho*", "destination": "https://revista-do-promotor.web.app/:caminho", "type": 301 }
+      ]
+    }
+  ]
 }

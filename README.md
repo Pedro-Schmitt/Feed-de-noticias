@@ -63,7 +63,7 @@ O site publicado é uma versão estática gerada por `python gerar_site.py` na p
 Configuração (uma vez só):
 
 1. Crie um projeto em https://console.firebase.google.com e ative o Hosting.
-2. O ID do projeto (`feed-de-atualizacoes---pedro`) fica em `.firebaserc` e em `.github/workflows/deploy.yml`. O site publicado fica em https://feed-de-atualizacoes---pedro.web.app.
+2. O ID do projeto (`feed-de-atualizacoes---pedro`) fica em `.firebaserc` e em `.github/workflows/deploy.yml`. O site publicado fica em https://revista-do-promotor.web.app (um segundo site do mesmo projeto, configurado em `firebase.json`); o endereço antigo, https://feed-de-atualizacoes---pedro.web.app, redireciona para ele.
 3. Em Configurações do projeto → Contas de serviço, gere uma nova chave privada e salve o conteúdo do JSON como secret `FIREBASE_SERVICE_ACCOUNT` no GitHub (Settings → Secrets and variables → Actions).
 4. No Google Cloud (IAM e administrador → IAM), edite a conta `firebase-adminsdk-...` e adicione os papéis **Administrador do Firebase Hosting**, **Consumidor do Service Usage** e **Leitor de chaves de API**. Sem isso, o deploy falha com `PERMISSION_DENIED`.
 5. Faça push e, se quiser, rode o workflow manualmente pela aba Actions ("Run workflow").

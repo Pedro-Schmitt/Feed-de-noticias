@@ -32,7 +32,8 @@ IBGE_BRASIL = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios?vi
 # GitHub Actions (fora do Brasil). Municípios e regiões quase nunca mudam; para atualizar,
 # rode "python regional.py --atualizar-ibge" num computador no Brasil
 ARQUIVO_IBGE = Path(__file__).with_name("dados") / "ibge_municipios.json"
-SITE_PUBLICADO = os.environ.get("SITE_PUBLICADO", "https://feed-de-atualizacoes---pedro.web.app")
+SITE_PUBLICADO = os.environ.get("SITE_PUBLICADO", "https://revista-do-promotor.web.app")
+SITE_ANTIGO = "https://feed-de-atualizacoes---pedro.web.app"  # hoje redireciona para o novo
 
 JANELA = timedelta(days=10)
 CIDADES_POR_BUSCA = 7       # buscas longas demais fazem o Google devolver menos resultados
@@ -193,11 +194,14 @@ def atualizar_estado(mapa, estado, orcamento=BUSCAS_POR_EXECUCAO):
 
 def estado_publicado():
     """O estado da última publicação (lido do próprio site), para continuar de onde parou."""
-    try:
-        return _get(f"{SITE_PUBLICADO}/regional/estado.json").json()
-    except Exception as erro:
-        print(f"[regional] Sem estado anterior ({erro}): começa do zero")
-        return {}
+    # O endereço antigo vale para a primeira publicação no novo, que ainda não tem o estado
+    for site in (SITE_PUBLICADO, SITE_ANTIGO):
+        try:
+            return _get(f"{site}/regional/estado.json").json()
+        except Exception as erro:
+            print(f"[regional] Sem estado anterior em {site} ({erro})")
+    print("[regional] Começa do zero")
+    return {}
 
 
 def dados_promotorias(mapa):
