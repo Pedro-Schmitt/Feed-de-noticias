@@ -218,6 +218,7 @@ const LINKS_JURIDICO = {
   mpgo: [
     ["Acessar todas as notícias do Portal do MPGO", "https://www.mpgo.mp.br/portal/noticias"],
     ["Acessar todas as notícias na Intranet do MPGO", "https://intranet.mpgo.mp.br/olimpo/news?category=ascom"],
+    ["Acessar o Diário Oficial do MPGO", "https://www.mpgo.mp.br/portal/domp"],
   ],
 };
 
