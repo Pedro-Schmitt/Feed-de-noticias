@@ -150,7 +150,7 @@ function destaqueELista(lista, textoVazio, comImagens = true) {
 function itemJuridico(n) {
   const item = elemento("li");
   const titulo = elemento("h3");
-  // Quadro "Ministério Público Brasileiro": de qual MP (estado ou ramo federal) é a notícia
+  // Quadro "Outros MPs do País": de qual MP (estado ou ramo federal) é a notícia
   if ("mp" in n) {
     const etiqueta = n.mp
       ? elemento("span", "etiqueta", n.mp.sigla === n.mp.nome ? n.mp.sigla : `${n.mp.sigla} · ${n.mp.nome}`)
@@ -230,21 +230,24 @@ function montarJuridico() {
     painel.style.setProperty("--cor", CORES_SECOES[orgao.id] || "#6b7280");
     painel.append(elemento("h2", "", orgao.nome));
 
-    if (!orgao.noticias.length) {
+    // O STF segue o modelo do Presidente, do Senado e da Câmara: três notícias e a agenda abaixo
+    const comoOrgao = orgao.id === "stf";
+    const lista_ = comoOrgao ? orgao.noticias.slice(0, 3) : orgao.noticias;
+    if (comoOrgao) painel.append(elemento("h3", "titulo-agenda", "Principais notícias"));
+    if (!lista_.length) {
       painel.append(elemento("p", "vazio", "Nenhuma notícia recente."));
     } else {
       const lista = elemento("ul", "juridicas");
-      orgao.noticias.forEach((n) => lista.append(itemJuridico(n)));
+      lista_.forEach((n) => lista.append(itemJuridico(n)));
       painel.append(lista);
     }
     // STF e CSMP mostram, abaixo das notícias, o que está em julgamento
     if (orgao.id in MONTAR_AGENDA) {
       const agenda = elemento("div", "agenda-juridica");
       agenda.dataset.agenda = orgao.id;
-      agenda.append(elemento("h3", "titulo-agenda", "Em julgamento"), elemento("div", "agenda-corpo"));
+      agenda.append(elemento("h3", "titulo-agenda", comoOrgao ? "Agenda" : "Em julgamento"), elemento("div", "agenda-corpo"));
       painel.append(agenda);
     }
-    if (orgao.id === "mpgo") painel.append(blocoEditais(noticias.editais));
     if (LINKS_JURIDICO[orgao.id]) {
       const links = elemento("div", "links-quadro");
       for (const [texto, href] of LINKS_JURIDICO[orgao.id]) links.append(linkExterno(href, texto));
@@ -253,14 +256,14 @@ function montarJuridico() {
     paineis[orgao.id] = painel;
     container.append(painel);
   }
-  // O MPGO ocupa a linha inteira: as notícias dele à esquerda e o quadro do CSMP à direita
+  // O MPGO ocupa a linha inteira em três colunas: notícias, editais e o quadro do CSMP
   const { mpgo, csmp } = paineis;
   if (mpgo) {
     mpgo.classList.add("painel-mpgo");
     const principal = elemento("div", "mpgo-principal");
     principal.append(...[...mpgo.children].slice(1)); // tudo menos o título
     const colunas = elemento("div", "mpgo-colunas");
-    colunas.append(principal);
+    colunas.append(principal, blocoEditais(noticias.editais));
     if (csmp) {
       csmp.classList.add("painel-interno");
       colunas.append(csmp);

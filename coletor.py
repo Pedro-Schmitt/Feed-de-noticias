@@ -313,7 +313,7 @@ JURIDICO = [
     ("mpgo", "MPGO", '(MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "Ministério Público do Estado de Goiás") when:7d'),
     ("csmp", "CSMP do MPGO",
      '("Conselho Superior" OR CSMP) (MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "MP de Goiás") when:60d'),
-    ("mp", "Ministério Público Brasileiro", '"Ministério Público" when:2d'),
+    ("mp", "Outros MPs do País", '"Ministério Público" when:2d'),
     ("stf", "STF", "STF when:2d"),
     ("stj", "STJ", "STJ when:3d"),
     ("tjgo", "TJGO", '(TJGO OR "TJ-GO" OR "Tribunal de Justiça de Goiás") when:7d'),
@@ -378,7 +378,7 @@ def buscar_google_noticias(busca):
     return noticias
 
 
-# --- De qual Ministério Público trata a notícia (quadro "Ministério Público Brasileiro") ---
+# --- De qual Ministério Público trata a notícia (quadro "Outros MPs do País") ---
 
 # Ramos do Ministério Público da União e afins: (sigla, nome, padrão)
 RAMOS_MPU = [
