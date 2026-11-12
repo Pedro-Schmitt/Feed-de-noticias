@@ -30,22 +30,52 @@ _paginas_pdf = {}
 
 MARCAS = {"⭐": "importante", "🏛": "repetitivo", "🔄": "mudanca"}
 
-# Indicação automática de interesse para o MP estadual (não é análise jurídica):
-# 1) o julgado cita o Ministério Público; 2) é de uma área típica de atuação do MP
+# Matérias de atuação do MP estadual. A mesma lista classifica os julgados dos informativos e
+# as atribuições das promotorias (lista oficial do MPGO), para que um "converse" com o outro.
+# É uma indicação automática por palavras-chave, não análise jurídica
 CITA_MP = re.compile(r"Minist[ée]rio P[úu]blico|\bMPs?\b|\bparquet\b|promotor", re.I)
-AREAS_MP = [
-    ("Direito Penal", re.compile(r"\b(crimes?|criminal|drogas|tr[áa]fico|j[úu]ri)\b", re.I)),
-    ("Improbidade", re.compile(r"improbidade", re.I)),
-    ("Ação civil pública", re.compile(r"a[çc][ãa]o civil p[úu]blica|inqu[ée]rito civil|ajustamento de conduta|\bTAC\b", re.I)),
-    ("Meio ambiente", re.compile(r"ambient", re.I)),
+CITA_MP_ROTULO = "Cita o Ministério Público"
+MATERIAS = [
+    # "penal" sozinho fica de fora (pegaria "Polícia Penal"); o ramo penal é reconhecido pelo ramo do julgado
+    ("Criminal", re.compile(r"\b(crimes?|criminal|criminais|drogas|entorpecentes?|tr[áa]fico|"
+                            r"inqu[ée]rito policial|habeas corpus)\b", re.I)),
+    ("Tribunal do Júri", re.compile(r"j[úu]ri", re.I)),
+    ("Execução penal", re.compile(r"execu[çc][ãa]o penal|execu[çc][õo]es penais|indulto|livramento condicional|"
+                                  r"progress[ãa]o de regime", re.I)),
+    ("Violência doméstica", re.compile(r"viol[êe]ncia dom[ée]stica|Maria da Penha|feminic|contra a mulher", re.I)),
+    ("Infância e juventude", re.compile(r"inf[âa]ncia|juventude|crian[çc]as?|adolescentes?|ato infracional|\bECA\b", re.I)),
+    ("Família e sucessões", re.compile(r"fam[íi]lia|sucess[õo]es|\balimentos\b|div[óo]rcio|uni[ãa]o est[áa]vel|"
+                                       r"casamento|curatela|interdi[çc]", re.I)),
+    ("Patrimônio público", re.compile(r"patrim[ôo]nio p[úu]blico|improbidade|licita[çc]|er[áa]rio|fazendas? p[úu]blicas?",
+                                      re.I)),
+    ("Tutela coletiva", re.compile(r"a[çc][ãa]o civil p[úu]blica|inqu[ée]rito civil|ajustamento de conduta|\bTAC\b|"
+                                   r"difusos|coletivos", re.I)),
+    ("Meio ambiente e urbanismo", re.compile(r"ambient|urban[íi]s|patrim[ôo]nio hist[óo]rico|cultural|parcelamento do solo",
+                                             re.I)),
     ("Consumidor", re.compile(r"consumidor", re.I)),
-    ("Infância e juventude", re.compile(r"crian[çc]a|adolescente|\bECA\b|ato infracional", re.I)),
-    ("Violência doméstica", re.compile(r"Maria da Penha|viol[êe]ncia dom[ée]stica|feminic", re.I)),
-    ("Saúde", re.compile(r"\bsa[úu]de\b|\bSUS\b|medicamento", re.I)),
+    ("Saúde", re.compile(r"\bsa[úu]de\b|\bSUS\b|medicamentos?", re.I)),
+    ("Educação", re.compile(r"educa[çc][ãa]o|\bensino\b|escolas?\b", re.I)),
+    ("Idoso e pessoa com deficiência", re.compile(r"\bidos[oa]s?\b|defici[êe]ncia", re.I)),
     ("Eleitoral", re.compile(r"eleitora", re.I)),
-    ("Patrimônio público", re.compile(r"patrim[ôo]nio p[úu]blico|licita[çc]|erário", re.I)),
-    ("Idoso e pessoa com deficiência", re.compile(r"\bidos[oa]s?\b|pessoa com defici[êe]ncia", re.I)),
+    ("Registros públicos", re.compile(r"registros? p[úu]blicos?|registro civil|cart[óo]rio|notaria", re.I)),
+    ("Fundações", re.compile(r"funda[çc][õo]es|terceiro setor", re.I)),
+    ("Controle externo da atividade policial", re.compile(r"atividade policial|controle externo", re.I)),
+    ("Ordem tributária", re.compile(r"ordem tribut[áa]ria|sonega[çc][ãa]o|crimes? tribut", re.I)),
+    ("Cidadania", re.compile(r"cidad[ãa]os?\b|cidadania|direitos humanos", re.I)),
 ]
+TODAS_AS_MATERIAS = [nome for nome, _ in MATERIAS]
+
+
+def materias_do_texto(texto):
+    return [nome for nome, padrao in MATERIAS if padrao.search(texto)]
+
+
+def materias_da_atribuicao(atribuicao):
+    """Matérias de uma promotoria pela sua atribuição. "Plena" (comarca de promotoria única) ou
+    sem nenhuma matéria reconhecida vale como todas."""
+    achadas = materias_do_texto(atribuicao or "")
+    plena = not achadas or bool(re.fullmatch(r"\s*plena\.?\s*", atribuicao or "", re.I))
+    return {"materias": TODAS_AS_MATERIAS if plena else achadas, "plena": plena}
 
 
 def _texto(trecho):
@@ -55,15 +85,12 @@ def _texto(trecho):
 
 
 def _interesse_mp(ramo, assunto, tese):
-    """Motivos pelos quais o julgado interessa ao MP estadual (lista vazia se nenhum)."""
-    motivos = []
-    if CITA_MP.search(tese) or CITA_MP.search(assunto):
-        motivos.append("Cita o Ministério Público")
-    tudo = f"{ramo} {assunto} {tese}"
-    motivos += [area for area, padrao in AREAS_MP if padrao.search(tudo)]
-    if "PENAL" in ramo.upper() and "Direito Penal" not in motivos:  # ramo penal ou processual penal
-        motivos.append("Direito Penal")
-    return motivos
+    """Por que o julgado interessa ao MP estadual: cita o MP e/ou as matérias (lista vazia se nenhum)."""
+    motivos = [CITA_MP_ROTULO] if CITA_MP.search(tese) or CITA_MP.search(assunto) else []
+    materias = materias_do_texto(f"{ramo} {assunto} {tese}")
+    if "PENAL" in ramo.upper() and "Criminal" not in materias:  # ramo penal ou processual penal
+        materias.insert(0, "Criminal")
+    return motivos + materias
 
 
 def ler_indice(conteudo):

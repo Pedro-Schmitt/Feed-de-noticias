@@ -2,13 +2,14 @@
 
 import threading
 import time
-from datetime import date
+from datetime import date, datetime, timezone
 
 from flask import Flask, jsonify, render_template
 
 import agendas
 import coletor
 import cotacoes
+import regional
 
 app = Flask(__name__)
 app.json.sort_keys = False  # mantém a ordem: editorias, e dólar, euro, bitcoin...
@@ -20,6 +21,12 @@ _lock_noticias = threading.Lock()
 CACHE_AGENDAS_SEGUNDOS = 10 * 60
 _cache_agendas = {"momento": 0.0, "dados": None}
 _lock_agendas = threading.Lock()
+
+CACHE_MAPA_SEGUNDOS = 24 * 60 * 60
+CACHE_LOCAL_SEGUNDOS = 2 * 60 * 60
+_cache_mapa = {"momento": 0.0, "dados": None}
+_cache_locais = {}
+_lock_regional = threading.Lock()
 
 CACHE_INTRADIA_SEGUNDOS = 5 * 60
 _cache_intradia = {"momento": 0.0, "dados": None}
@@ -87,6 +94,38 @@ def carregar_agendas():
 @app.route("/api/agendas")
 def api_agendas():
     return jsonify(carregar_agendas())
+
+
+def mapa_regional():
+    """Promotorias, comarcas e buscas de cada cidade e região (mudam pouco: cache de um dia)."""
+    with _lock_regional:
+        if time.time() - _cache_mapa["momento"] > CACHE_MAPA_SEGUNDOS:
+            _cache_mapa["dados"] = regional.montar_mapa()
+            _cache_mapa["momento"] = time.time()
+        return _cache_mapa["dados"]
+
+
+@app.route("/api/promotorias")
+def api_promotorias():
+    return jsonify(regional.dados_promotorias(mapa_regional()))
+
+
+@app.route("/regional/<id_>.json")
+def api_regional(id_):
+    """Notícias de uma cidade ou região, buscadas na hora (no site publicado, são geradas antes)."""
+    local = mapa_regional()["locais"].get(id_)
+    if not local:
+        return jsonify({"erro": "local desconhecido"}), 404
+    guardado = _cache_locais.get(id_)
+    if not guardado or time.time() - guardado[0] > CACHE_LOCAL_SEGUNDOS:
+        guardado = (time.time(), {
+            "nome": local["nome"],
+            "tipo": local["tipo"],
+            "atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "noticias": regional.noticias_do_local(local),
+        })
+        _cache_locais[id_] = guardado
+    return jsonify(guardado[1])
 
 
 @app.route("/api/cotacoes")

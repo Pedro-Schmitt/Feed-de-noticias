@@ -348,6 +348,81 @@ a { color: inherit; text-decoration: none; }
 
 .agenda-juridica .agenda-corpo { max-height: 420px; }
 
+/* --- Notícias da região do promotor --- */
+
+.seletor-promotoria {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 640px;
+  margin-bottom: 14px;
+}
+
+.seletor-promotoria[hidden] { display: none; }  /* o display: flex acima anularia o hidden */
+.seletor-promotoria label { font-weight: 600; }
+
+.seletor-promotoria input {
+  font: inherit;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--borda);
+  background: var(--painel);
+  color: var(--texto);
+}
+
+.seletor-promotoria input:focus { outline: 2px solid var(--cor-area); outline-offset: 1px; }
+
+#area-promotoria .seletor-promotoria { margin-bottom: 0; }
+#promotoria-escolhida { display: flex; flex-direction: column; gap: 6px; }
+#promotoria-escolhida[hidden] { display: none; }
+.promotoria-nome { margin: 0; font-size: 1.15rem; font-weight: 700; }
+#promotoria-escolhida .nota { margin: 0; }
+.atribuicao summary { cursor: pointer; font-size: 0.85rem; color: var(--suave); }
+.atribuicao p { margin: 6px 0 0; font-size: 0.85rem; line-height: 1.45; max-width: 900px; }
+#filtro-jurisprudencia[hidden] { display: none; }
+.area-cabecalho > .alternador { flex: none; min-width: 0; }  /* não estica como o texto do cabeçalho */
+
+/* Alternador segmentado (ex.: "Da minha promotoria | Todos de interesse do MP") */
+.alternador {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--borda);
+  background: var(--fundo);
+}
+
+.alternador button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--suave);
+  cursor: pointer;
+}
+
+.alternador button:hover { color: var(--texto); }
+
+.alternador button.ativo {
+  background: var(--painel);
+  color: var(--texto);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+
+.botao-trocar {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--borda);
+  background: var(--painel);
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.botao-trocar:hover { border-color: var(--suave); }
+
 /* --- Informativos do STF e do STJ --- */
 
 

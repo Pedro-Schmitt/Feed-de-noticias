@@ -13,6 +13,7 @@ from flask import render_template
 import agendas
 import coletor
 import cotacoes
+import regional
 from app import app
 
 RAIZ = Path(__file__).parent
@@ -48,6 +49,13 @@ def main():
     gravar_json("agendas.json", agendas.coletar())
     gravar_json("cotacoes.json", cotacoes.carregar())
     gravar_json("intradia.json", cotacoes.buscar_intradia())
+
+    # Notícias de cada cidade e região (uma parte por execução) e a lista de promotorias.
+    # Se falhar, o site sai sem essa parte em vez de não sair
+    try:
+        regional.gerar(SAIDA)
+    except Exception as erro:
+        print(f"[gerar_site] Falha nas notícias por região: {erro}")
 
     with app.test_request_context():
         html = render_template("index.html")
