@@ -16,8 +16,9 @@
   --imagem-vazia: #e9edf3;
 }
 
+/* Tema escuro: pelo sistema, a menos que o leitor tenha escolhido o claro no switch... */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema="claro"]) {
     --fundo: #04060a;
     --painel: #0a0e15;
     --texto: #e8eaf0;
@@ -33,6 +34,24 @@
     --painel-vidro: rgb(10 14 21 / 0.88);
     --imagem-vazia: #121926;
   }
+}
+
+/* ...ou escolhido pelo leitor no switch */
+:root[data-tema="escuro"] {
+  --fundo: #04060a;
+  --painel: #0a0e15;
+  --texto: #e8eaf0;
+  --suave: #9aa2b1;
+  --borda: #1a2230;
+  --destaque: #34c77b;
+  --alta: #34c77b;
+  --baixa: #ff6b5e;
+  --veu-fundo:
+    radial-gradient(60vw 50vh at 0% 0%, rgb(0 156 59 / 0.22), transparent 70%),
+    radial-gradient(50vw 45vh at 100% 10%, rgb(255 205 0 / 0.10), transparent 70%),
+    radial-gradient(70vw 60vh at 60% 100%, rgb(40 90 220 / 0.18), transparent 70%);
+  --painel-vidro: rgb(10 14 21 / 0.88);
+  --imagem-vazia: #121926;
 }
 
 * { box-sizing: border-box; }
@@ -348,6 +367,53 @@ a { color: inherit; text-decoration: none; }
 
 .agenda-juridica .agenda-corpo { max-height: 420px; }
 
+/* --- Topo: título e switch de tema --- */
+
+.topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.switch-tema {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  cursor: pointer;
+  user-select: none;
+  flex: none;
+}
+
+/* A caixa de seleção fica escondida; o trilho com a bolinha faz o papel dela */
+.switch-tema input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+
+.switch-tema .trilho {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--borda);
+  border: 1px solid var(--suave);
+  transition: background 0.2s;
+}
+
+.switch-tema .trilho::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--texto);
+  transition: transform 0.2s;
+}
+
+.switch-tema input:checked + .trilho::after { transform: translateX(20px); }
+.switch-tema input:focus-visible + .trilho { outline: 2px solid var(--destaque); outline-offset: 2px; }
+
 /* --- Notícias da região do promotor --- */
 
 .seletor-promotoria {
@@ -360,6 +426,22 @@ a { color: inherit; text-decoration: none; }
 
 .seletor-promotoria[hidden] { display: none; }  /* o display: flex acima anularia o hidden */
 .seletor-promotoria label { font-weight: 600; }
+
+.campo-com-botao { display: flex; gap: 8px; }
+.campo-com-botao input { flex: 1; min-width: 0; }
+
+.botao-ir {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--cor-area);
+  color: #fff;
+  cursor: pointer;
+}
+
+.botao-ir:hover { filter: brightness(1.1); }
 
 .seletor-promotoria input {
   font: inherit;

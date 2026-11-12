@@ -415,7 +415,7 @@ function mostrarPromotoria(promotoria) {
   const atribuicao = elemento("details", "atribuicao");
   atribuicao.append(elemento("summary", "", "Atribuição (lista oficial do MPGO)"), elemento("p", "", promotoria.atribuicao || "Não informada."));
   const aviso = elemento("p", "nota", "As matérias são identificadas automaticamente pelo texto da atribuição; ressalvas como \"exceto\" ou \"exclusivamente\" não são consideradas.");
-  cartao.style.setProperty("--cor", "#475569");
+  cartao.style.setProperty("--cor", "#6b7f99");
   cartao.replaceChildren(titulo, comarca, materias, atribuicao, aviso);
   cartao.hidden = false;
 }
@@ -479,6 +479,7 @@ async function iniciarPromotoria() {
   const campo = document.getElementById("campo-promotoria");
   campo.addEventListener("change", escolherPromotoria);
   campo.addEventListener("keydown", (e) => { if (e.key === "Enter") escolherPromotoria(); });
+  document.getElementById("ir-promotoria").addEventListener("click", escolherPromotoria);
   document.getElementById("trocar-promotoria").addEventListener("click", pedirPromotoria);
 
   // Promotoria salva numa visita anterior (com os dados atuais da lista oficial)
@@ -494,9 +495,8 @@ function pertinente(julgado) {
 }
 
 function atualizarSubtitulo() {
-  const falhas = noticias.falhas.length ? ` · ${noticias.falhas.length} feed(s) indisponível(is) agora` : "";
-  document.getElementById("subtitulo").textContent =
-    `As cinco principais de cada editoria, entre ${noticias.total} notícias de ${noticias.fontes.length} veículos · atualizado ${tempoRelativo(noticias.atualizado)}${falhas}`;
+  const quando = tempoRelativo(noticias.atualizado);
+  document.getElementById("subtitulo").textContent = `Atualizado ${quando === "agora" ? "agora" : quando}`;
 }
 
 async function carregarNoticias() {
@@ -783,10 +783,22 @@ const PERIODOS = {
   dia: { rotulo: "nas últimas 24h", recuar: (d) => d.setUTCDate(d.getUTCDate() - 1) },
 };
 
-const escuro = window.matchMedia("(prefers-color-scheme: dark)").matches;
-const corTexto = escuro ? "#e8eaf0" : "#1d2230";
-const corGrade = escuro ? "#1a2230" : "#e3e6eb";
-const corSuave = escuro ? "#9aa2b1" : "#4b5563";
+// Cores dos gráficos conforme o tema (do sistema ou escolhido no switch)
+let escuro, corTexto, corGrade, corSuave;
+
+function temaEscuro() {
+  const escolhido = document.documentElement.dataset.tema;
+  return escolhido ? escolhido === "escuro" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function atualizarCoresGraficos() {
+  escuro = temaEscuro();
+  corTexto = escuro ? "#e8eaf0" : "#1d2230";
+  corGrade = escuro ? "#1a2230" : "#e3e6eb";
+  corSuave = escuro ? "#9aa2b1" : "#4b5563";
+}
+
+atualizarCoresGraficos();
 
 let cotacoes = null;
 let periodoAtual = "anos5";
@@ -1018,4 +1030,17 @@ document.getElementById("filtro-jurisprudencia").addEventListener("click", (even
   if (!botao) return;
   filtroJurisprudencia = botao.dataset.filtro;
   if (noticias) montarInformativos();
+});
+
+// Switch de tema: marcado = escuro. A escolha fica salva; sem escolha, segue o sistema
+const switchTema = document.getElementById("alternar-tema");
+switchTema.checked = temaEscuro();
+switchTema.addEventListener("change", () => {
+  const tema = switchTema.checked ? "escuro" : "claro";
+  document.documentElement.dataset.tema = tema;
+  try {
+    localStorage.setItem("tema", tema);
+  } catch { /* sem localStorage: vale só nesta visita */ }
+  atualizarCoresGraficos();
+  if (cotacoes) montarGraficos();
 });
