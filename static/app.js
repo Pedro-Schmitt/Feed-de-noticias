@@ -230,9 +230,10 @@ function montarJuridico() {
     painel.style.setProperty("--cor", CORES_SECOES[orgao.id] || "#6b7280");
     painel.append(elemento("h2", "", orgao.nome));
 
-    // O STF segue o modelo do Presidente, do Senado e da Câmara: três notícias e a agenda abaixo
+    // O STF segue o modelo do Presidente, do Senado e da Câmara: três notícias e a agenda abaixo.
+    // O CSMP também mostra só três, para o quadro do MPGO não ficar tão alto
     const comoOrgao = orgao.id === "stf";
-    const lista_ = comoOrgao ? orgao.noticias.slice(0, 3) : orgao.noticias;
+    const lista_ = comoOrgao || orgao.id === "csmp" ? orgao.noticias.slice(0, 3) : orgao.noticias;
     if (comoOrgao) painel.append(elemento("h3", "titulo-agenda", "Principais notícias"));
     if (!lista_.length) {
       painel.append(elemento("p", "vazio", "Nenhuma notícia recente."));

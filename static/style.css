@@ -717,6 +717,7 @@ a.julgado-tese:hover { text-decoration: underline; }
 .baixa { color: var(--baixa); }
 
 footer { padding-bottom: 24px; }
+.rodape-sobre { margin: 0 0 10px; font-weight: 600; color: var(--texto); }
 
 @media (max-width: 1400px) {
   .grade-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
