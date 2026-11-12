@@ -451,12 +451,12 @@ def identificar_mp(noticia):
     return None
 
 
-def escolher_juridicas(noticias):
-    """As POR_SECAO principais de uma busca jurídica, pelo mesmo critério das editorias."""
+def escolher_juridicas(noticias, quantidade=POR_SECAO):
+    """As principais de uma busca jurídica, pelo mesmo critério das editorias."""
     limite = (datetime.now(timezone.utc) - JANELA_RECENTES).isoformat()
     candidatos = [_candidato(noticias, grupo, grupo, limite) for grupo in agrupar_assuntos(noticias)]
     candidatos.sort(key=lambda c: c[0], reverse=True)
-    return [_montar(noticias, principal, por_fonte) for _, principal, por_fonte in candidatos[:POR_SECAO]]
+    return [_montar(noticias, principal, por_fonte) for _, principal, por_fonte in candidatos[:quantidade]]
 
 
 def _resultado_ou_none(futuro, nome):
@@ -495,7 +495,8 @@ def coletar():
     juridico = []
     for (id_, nome, busca), futuro in zip(JURIDICO, futuros_juridico):
         try:
-            escolhidas = escolher_juridicas(futuro.result())
+            # O MPGO mostra sete: o quadro dele, na linha inteira, tem mais espaço
+            escolhidas = escolher_juridicas(futuro.result(), 7 if id_ == "mpgo" else POR_SECAO)
         except Exception as erro:
             print(f"[coletor] Falha na busca jurídica {nome}: {erro}")
             falhas.append(f"Google Notícias: {nome}")

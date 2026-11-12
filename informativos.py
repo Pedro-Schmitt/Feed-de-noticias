@@ -201,11 +201,12 @@ def ultimos_informativos(rotulo, quantidade=QUANTIDADE):
 
 
 def coletar():
-    """Os três últimos informativos do STF e do STJ. Um tribunal com falha vira None."""
+    """Os últimos informativos do STF (cinco: o quadro tem mais espaço) e do STJ (três).
+    Um tribunal com falha vira None."""
     dados = {}
     for tribunal, rotulo in TRIBUNAIS.items():
         try:
-            dados[tribunal] = ultimos_informativos(rotulo)
+            dados[tribunal] = ultimos_informativos(rotulo, 5 if tribunal == "stf" else QUANTIDADE)
         except Exception as erro:
             print(f"[informativos] Falha nos informativos do {tribunal.upper()}: {erro}")
             dados[tribunal] = None

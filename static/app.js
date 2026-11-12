@@ -367,7 +367,7 @@ function montarInformativos() {
     if (!lista?.length) {
       painel.append(elemento("p", "vazio", "Não foi possível consultar o Dizer o Direito agora."));
     } else {
-      // Os três informativos rolam dentro do quadro, para a página não ficar comprida
+      // Os informativos rolam dentro do quadro, para a página não ficar comprida
       const corpo = elemento("div", "informativo-corpo");
       lista.forEach((info) => corpo.append(blocoInformativo(info)));
       painel.append(corpo);
