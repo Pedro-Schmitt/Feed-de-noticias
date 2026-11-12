@@ -227,6 +227,10 @@ a { color: inherit; text-decoration: none; }
   flex-direction: column;
   gap: 4px;
   font-size: 0.8rem;
+  /* Assuntos dados por muitos veículos (ex.: 30) rolam aqui dentro, sem esticar o quadro */
+  max-height: 120px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .tambem li { display: flex; gap: 8px; align-items: baseline; }

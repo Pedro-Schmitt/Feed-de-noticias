@@ -1,13 +1,14 @@
 """Coleta as principais notícias do Brasil a partir dos feeds RSS dos veículos."""
 
 import html
+import json
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import requests
 
@@ -318,6 +319,54 @@ def escolher_principais(noticias):
     return secoes
 
 
+# --- Miniaturas: notícias sem foto no feed (Folha, buscas do Google Notícias) ---
+
+NAVEGADOR = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/130.0 Safari/537.36"}
+_META_IMAGEM = re.compile(r"""<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*>""", re.I)
+_CONTEUDO = re.compile(r"""content=["']([^"']+)""")
+
+
+def _link_real(link):
+    """O endereço da notícia por trás de um link do Google Notícias (que só redireciona via JavaScript)."""
+    if "news.google.com" not in link:
+        return link
+    id_ = link.split("/articles/")[1].split("?")[0]
+    pagina = requests.get(f"https://news.google.com/rss/articles/{id_}", headers=NAVEGADOR, timeout=10).text
+    assinatura = re.search(r'data-n-a-sg="([^"]+)"', pagina).group(1)
+    momento = re.search(r'data-n-a-ts="([^"]+)"', pagina).group(1)
+    pedido = ["Fbv4je", f'["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],'
+                        f'"X","X",1,[1,1,1],1,1,null,0,0,null,0],"{id_}",{momento},"{assinatura}"]']
+    resp = requests.post(
+        "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+        headers={**NAVEGADOR, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"},
+        data="f.req=" + quote(json.dumps([[pedido]])),
+        timeout=10,
+    )
+    return json.loads(json.loads(resp.text.split("\n\n")[1])[0][2])[1]
+
+
+def _imagem_da_pagina(link):
+    """A imagem de compartilhamento (og:image) da página da notícia, ou None."""
+    try:
+        pagina = requests.get(_link_real(link), headers=NAVEGADOR, timeout=10).text
+        meta = _META_IMAGEM.search(pagina)
+        url = meta and _CONTEUDO.search(meta.group(0))
+        url = url and html.unescape(url.group(1))
+        # Logotipo do veículo não serve de miniatura
+        return url if url and url.startswith("https://") and "logo" not in url.lower() else None
+    except Exception:
+        return None
+
+
+def completar_imagens(secoes):
+    """Busca na página da notícia a imagem das que não vieram com foto."""
+    sem_imagem = [n for secao in secoes for n in secao["noticias"] if not n.get("imagem")]
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for noticia, imagem in zip(sem_imagem, executor.map(lambda n: _imagem_da_pagina(n["link"]), sem_imagem)):
+            noticia["imagem"] = imagem
+
+
 # --- Notícias jurídicas: buscas no Google Notícias, que junta sites oficiais e imprensa ---
 
 GOOGLE_NOTICIAS = "https://news.google.com/rss/search"
@@ -518,6 +567,9 @@ def coletar():
 
     noticias.sort(key=lambda n: n["data"], reverse=True)
 
+    secoes = escolher_principais(noticias)
+    completar_imagens(secoes)
+
     juridico = []
     for (id_, nome, busca), futuro in zip(JURIDICO, futuros_juridico):
         try:
@@ -546,7 +598,7 @@ def coletar():
         "total": len(noticias),
         "feeds": len(FEEDS) + len(JURIDICO) + 1,
         "falhas": falhas,
-        "secoes": escolher_principais(noticias),
+        "secoes": secoes,
         "juridico": juridico,
         "orgaos": orgaos,
         "informativos": futuro_informativos.result(),
