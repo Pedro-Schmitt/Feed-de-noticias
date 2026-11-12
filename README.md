@@ -1,6 +1,6 @@
 # Revista do Promotor
 
-Site em Python que mostra as **cinco principais notícias de Política, Economia, Tecnologia e Mundo**, a partir dos feeds RSS dos maiores veículos do país, e logo abaixo os **gráficos de cotação em R$** do dólar, euro, bitcoin, ethereum, Tron e Tether (filtros de 5 anos a 1 dia).
+Site em Python que mostra as **cinco principais notícias de Política, Economia, Tecnologia e Cibersegurança e Mundo** (cibersegurança vem também de uma busca no Google Notícias, com no máximo dois assuntos só dela entre os cinco), a partir dos feeds RSS dos maiores veículos do país, e logo abaixo os **gráficos de cotação em R$** do dólar, euro, bitcoin, ethereum, Tron e Tether (filtros de 5 anos a 1 dia).
 
 Há também um bloco de **notícias jurídicas** com as cinco principais sobre o STF, o STJ, o TJGO, os demais Ministérios Públicos do país (quadro "Outros MPs do País", cada notícia com a etiqueta do MP de que trata: estadual, como MPSP, ou ramo do MPU, como MPF e MPT), o Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP). Como esses órgãos não têm feed RSS acessível, as notícias vêm de buscas no Google Notícias (lista em `JURIDICO`, em `coletor.py`), que juntam os sites oficiais e a imprensa.
 

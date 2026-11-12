@@ -35,7 +35,7 @@ CATEGORIAS = {
     "mundo": "Mundo",
     "esportes": "Esportes",
     "saude": "Saúde",
-    "tecnologia": "Tecnologia",
+    "tecnologia": "Tecnologia e Cibersegurança",
 }
 
 # (veículo, categoria, url). Os feeds por editoria vêm antes dos gerais: quando a
@@ -271,13 +271,21 @@ def _candidato(noticias, grupo, opcoes, limite):
 def _montar(noticias, principal, por_fonte):
     fonte = noticias[principal]["fonte"]
     return {
-        **{k: v for k, v in noticias[principal].items() if k != "categoria"},
+        **{k: v for k, v in noticias[principal].items() if k not in ("categoria", "ciber")},
         "veiculos": len(por_fonte),
         "relacionadas": [
             {k: noticias[i][k] for k in ("fonte", "titulo", "link")}
             for f, i in por_fonte.items() if f != fonte
         ],
     }
+
+
+# Cibersegurança entra em Tecnologia por uma busca no Google Notícias (os feeds de tecnologia
+# quase não tratam do tema). No máximo MAXIMO_CIBER dos cinco assuntos vêm só dessa busca,
+# para a editoria não virar só de cibersegurança
+BUSCA_CIBER = ('(cibersegurança OR "segurança cibernética" OR ciberataque OR "ataque hacker" OR ransomware '
+               'OR "vazamento de dados" OR hackers OR "crime cibernético" OR "golpe digital") when:2d')
+MAXIMO_CIBER = 2
 
 
 def escolher_principais(noticias):
@@ -295,8 +303,15 @@ def escolher_principais(noticias):
                 candidatos.append((g, *_candidato(noticias, grupo, da_secao, limite)))
 
         candidatos.sort(key=lambda c: c[1], reverse=True)
-        escolhidas = []
-        for g, _, principal, por_fonte in candidatos[:POR_SECAO]:
+        escolhidas, ciber = [], 0
+        for g, _, principal, por_fonte in candidatos:
+            if len(escolhidas) == POR_SECAO:
+                break
+            so_ciber = all(noticias[i].get("ciber") for i in grupos[g] if noticias[i]["categoria"] == secao)
+            if so_ciber:
+                if ciber == MAXIMO_CIBER:
+                    continue
+                ciber += 1
             usados.add(g)
             escolhidas.append(_montar(noticias, principal, por_fonte))
         secoes.append({"id": secao, "nome": CATEGORIAS[secao], "noticias": escolhidas})
@@ -472,6 +487,7 @@ def coletar():
     with ThreadPoolExecutor(max_workers=10) as executor:
         futuros = [executor.submit(buscar_feed, *feed) for feed in FEEDS]
         futuros_juridico = [executor.submit(buscar_google_noticias, busca) for _, _, busca in JURIDICO]
+        futuro_ciber = executor.submit(buscar_google_noticias, BUSCA_CIBER)
         futuros_orgaos = [executor.submit(buscar_google_noticias, busca) for _, busca in ORGAOS]
         futuro_informativos = executor.submit(informativos.coletar)
         futuro_editais = executor.submit(editais.coletar)
@@ -489,6 +505,16 @@ def coletar():
             if chave not in vistos:
                 vistos.add(chave)
                 noticias.append(item)
+
+    try:
+        for item in futuro_ciber.result():
+            chave = _chave_link(item["link"])
+            if chave not in vistos:
+                vistos.add(chave)
+                noticias.append({**item, "categoria": "tecnologia", "ciber": True})
+    except Exception as erro:  # sem a busca, Tecnologia fica só com os feeds
+        print(f"[coletor] Falha na busca de cibersegurança: {erro}")
+        falhas.append("Google Notícias: cibersegurança")
 
     noticias.sort(key=lambda n: n["data"], reverse=True)
 
@@ -518,7 +544,7 @@ def coletar():
         "atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "fontes": sorted({veiculo for veiculo, _, _ in FEEDS}),
         "total": len(noticias),
-        "feeds": len(FEEDS) + len(JURIDICO),
+        "feeds": len(FEEDS) + len(JURIDICO) + 1,
         "falhas": falhas,
         "secoes": escolher_principais(noticias),
         "juridico": juridico,
