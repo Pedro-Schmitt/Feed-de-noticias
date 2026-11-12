@@ -20,6 +20,7 @@ JANELA = timedelta(hours=48)  # notícias mais antigas que isso ficam de fora
 JANELA_RECENTES = timedelta(hours=24)  # na escolha das principais, as das últimas 24h vêm antes
 MAX_POR_FEED = 40
 POR_SECAO = 5
+POR_EDITORIA = 20  # a página mostra cinco e o botão "Carregar mais notícias" o resto
 TAMANHO_RESUMO = 240
 
 # Editorias exibidas no site, na ordem da página
@@ -282,7 +283,7 @@ def _montar(noticias, principal, por_fonte):
 
 
 # Cibersegurança entra em Tecnologia por uma busca no Google Notícias (os feeds de tecnologia
-# quase não tratam do tema). No máximo MAXIMO_CIBER dos cinco assuntos vêm só dessa busca,
+# quase não tratam do tema). No máximo MAXIMO_CIBER de cada cinco assuntos vêm só dessa busca,
 # para a editoria não virar só de cibersegurança
 BUSCA_CIBER = ('(cibersegurança OR "segurança cibernética" OR ciberataque OR "ataque hacker" OR ransomware '
                'OR "vazamento de dados" OR hackers OR "crime cibernético" OR "golpe digital") when:2d')
@@ -290,7 +291,7 @@ MAXIMO_CIBER = 2
 
 
 def escolher_principais(noticias):
-    """As POR_SECAO notícias principais de cada editoria em SECOES.
+    """As POR_EDITORIA notícias principais de cada editoria em SECOES.
     Cada assunto aparece em uma editoria só (a primeira de SECOES em que ele entra)."""
     limite = (datetime.now(timezone.utc) - JANELA_RECENTES).isoformat()
     grupos = agrupar_assuntos(noticias)
@@ -306,11 +307,12 @@ def escolher_principais(noticias):
         candidatos.sort(key=lambda c: c[1], reverse=True)
         escolhidas, ciber = [], 0
         for g, _, principal, por_fonte in candidatos:
-            if len(escolhidas) == POR_SECAO:
+            if len(escolhidas) == POR_EDITORIA:
                 break
             so_ciber = all(noticias[i].get("ciber") for i in grupos[g] if noticias[i]["categoria"] == secao)
             if so_ciber:
-                if ciber == MAXIMO_CIBER:
+                # No máximo MAXIMO_CIBER a cada cinco (as cinco que aparecem primeiro, as dez seguintes...)
+                if ciber >= MAXIMO_CIBER * (len(escolhidas) // 5 + 1):
                     continue
                 ciber += 1
             usados.add(g)

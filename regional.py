@@ -156,7 +156,7 @@ def montar_mapa():
 # --- Notícias de cada local ---
 
 def noticias_do_local(local):
-    """As cinco principais notícias recentes de uma cidade ou região."""
+    """As 20 principais notícias recentes de uma cidade ou região (a página mostra cinco de início)."""
     limite = (datetime.now(timezone.utc) - JANELA).isoformat()
     itens, vistos = [], set()
     for busca in local["buscas"]:
@@ -166,7 +166,7 @@ def noticias_do_local(local):
                 itens.append(noticia)
         time.sleep(PAUSA_ENTRE_BUSCAS)
     itens.sort(key=lambda n: n["data"], reverse=True)
-    return coletor.escolher_juridicas(itens)
+    return coletor.escolher_juridicas(itens, coletor.POR_EDITORIA)
 
 
 def atualizar_estado(mapa, estado, orcamento=BUSCAS_POR_EXECUCAO):

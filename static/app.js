@@ -133,18 +133,33 @@ function montarSecoes() {
  * A primeira notícia em destaque e as outras em lista (editorias e Ceres).
  * Sem imagens (Ceres: a busca não traz fotos), o quadro fica só com os textos.
  */
+const VISIVEIS = 5; // notícias de cada quadro antes do botão "Carregar mais notícias"
+
 function destaqueELista(lista, textoVazio, comImagens = true) {
   const [primeira, ...demais] = lista;
   if (!primeira) return [elemento("p", "vazio", textoVazio)];
   const outras = elemento("ul", "outras");
-  for (const n of demais) {
+  demais.forEach((n, i) => {
     const corpo = elemento("div", "corpo");
     corpo.append(linhaMeta(n), elemento("h3", "", n.titulo));
     const item = elemento("li");
     item.append(comImagens ? link(n, imagem(n), corpo) : link(n, corpo));
+    item.hidden = i >= VISIVEIS - 1;
     outras.append(item);
-  }
-  return [noticiaLider(primeira, comImagens), outras];
+  });
+  if (lista.length <= VISIVEIS) return [noticiaLider(primeira, comImagens), outras];
+
+  // As demais aparecem no botão, numa lista com barra de rolagem
+  const botao = elemento("button", "carregar-mais", "Carregar mais notícias");
+  botao.type = "button";
+  botao.addEventListener("click", () => {
+    const abrir = !outras.classList.contains("expandida");
+    outras.classList.toggle("expandida", abrir);
+    [...outras.children].forEach((li, i) => { li.hidden = !abrir && i >= VISIVEIS - 1; });
+    botao.textContent = abrir ? "Mostrar menos" : "Carregar mais notícias";
+    if (!abrir) outras.scrollTop = 0;
+  });
+  return [noticiaLider(primeira, comImagens), outras, botao];
 }
 
 function itemJuridico(n) {
