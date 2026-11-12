@@ -19,39 +19,24 @@
   </header>
 
   <main>
-    <section class="area" id="area-gerais" style="--cor-area: #2f6fdb">
+    <section class="area" id="area-jurisprudencia" style="--cor-area: #d6336c">
       <header class="area-cabecalho">
-        <span class="area-numero">1</span>
         <div>
-          <h2>Notícias Gerais</h2>
-          <p class="nota">As cinco principais de Política, Economia, Tecnologia e Mundo, escolhidas pelos assuntos noticiados por mais veículos.</p>
+          <h2>Jurisprudência</h2>
+          <p class="nota">Últimos informativos do STF e do STJ explicados pelo Dizer o Direito, com os julgados de interesse do MP estadual.</p>
         </div>
       </header>
-      <div id="secoes" class="secoes"></div>
+      <div id="informativos" class="secoes"></div>
     </section>
 
-    <section class="area" id="area-locais" style="--cor-area: #0f9d58">
+    <section class="area" id="area-noticias" style="--cor-area: #2f6fdb">
       <header class="area-cabecalho">
-        <span class="area-numero">2</span>
         <div>
-          <h2>Notícias Locais de Ceres e Vale do São Patrício</h2>
-          <p class="nota">As cinco principais notícias de Ceres e das demais cidades do Vale do São Patrício nos últimos 10 dias.</p>
-        </div>
-      </header>
-      <div id="regional" class="secoes"></div>
-    </section>
-
-    <section class="area" id="area-juridico" style="--cor-area: #c9a227">
-      <header class="area-cabecalho">
-        <span class="area-numero">3</span>
-        <div>
-          <h2>Notícias do Mundo Jurídico e Agenda dos Órgãos</h2>
-          <p class="nota">STF, STJ, TJGO, Ministério Público, MPGO e CSMP, com o que está em julgamento no STF e no CSMP, e as agendas do Presidente, do Senado e da Câmara.</p>
+          <h2>Notícias</h2>
         </div>
       </header>
 
-      <h3 class="subtitulo-area">Notícias jurídicas</h3>
-      <p class="nota">As cinco principais sobre cada órgão, dos sites oficiais e da imprensa.</p>
+      <h3 class="subtitulo-area">Jurídicas</h3>
       <div id="juridico" class="grade-juridico"></div>
 
       <h3 class="subtitulo-area">Agendas dos órgãos</h3>
@@ -70,13 +55,24 @@
           <div class="agenda-corpo"></div>
         </section>
       </div>
+
+      <h3 class="subtitulo-area">Gerais</h3>
+      <div id="secoes" class="secoes"></div>
+    </section>
+
+    <section class="area" id="area-regiao" style="--cor-area: #0f9d58">
+      <header class="area-cabecalho">
+        <div>
+          <h2>Notícias específicas da sua região</h2>
+        </div>
+      </header>
+      <div id="regional" class="secoes"></div>
     </section>
 
     <section class="area" id="area-cotacoes" style="--cor-area: #8b5cf6">
       <header class="area-cabecalho">
-        <span class="area-numero">4</span>
         <div>
-          <h2>Cotações das Principais Moedas</h2>
+          <h2>Cotações</h2>
           <p id="nota-cotacoes" class="nota">Carregando cotações…</p>
         </div>
         <nav id="filtros" class="filtros" aria-label="Período">
@@ -97,6 +93,7 @@
     As principais são os assuntos noticiados por mais veículos; os títulos e resumos são dos próprios veículos.
     Notícias jurídicas: buscas no Google Notícias sobre STF, STJ, TJGO, Ministério Público, Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP).
     Ceres e Vale do São Patrício: buscas no Google Notícias por Ceres e pelas cidades do Vale.
+    Informativos: Dizer o Direito (informativos comentados do STF e do STJ).
     Agendas: calendário de julgamentos do STF, pautas do CSMP publicadas pelo MPGO, agenda do Presidente no Planalto e dados abertos do Senado e da Câmara.
     Cotações: Banco Central do Brasil (PTAX de venda, só dias úteis) e Binance (fechamento diário em UTC); o Tron é calculado como TRX/USDT × USDT/BRL.
     No filtro "1 dia" as cotações são de hora em hora: criptos pela Binance, dólar e euro pelo Yahoo Finance (cotação de mercado, não a PTAX).

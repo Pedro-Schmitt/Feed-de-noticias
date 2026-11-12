@@ -11,6 +11,9 @@ from urllib.parse import urlsplit
 
 import requests
 
+import editais
+import informativos
+
 TIMEOUT = 20
 JANELA = timedelta(hours=48)  # notícias mais antigas que isso ficam de fora
 JANELA_RECENTES = timedelta(hours=24)  # na escolha das principais, as das últimas 24h vêm antes
@@ -307,13 +310,13 @@ GOOGLE_NOTICIAS = "https://news.google.com/rss/search"
 # (id, nome, busca). O "when:" limita a idade das notícias; o CSMP publica pouco,
 # por isso olha um período bem maior
 JURIDICO = [
-    ("stf", "STF", "STF when:2d"),
-    ("stj", "STJ", "STJ when:3d"),
-    ("tjgo", "TJGO", '(TJGO OR "TJ-GO" OR "Tribunal de Justiça de Goiás") when:7d'),
-    ("mp", "Ministério Público brasileiro", '"Ministério Público" when:2d'),
     ("mpgo", "MPGO", '(MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "Ministério Público do Estado de Goiás") when:7d'),
     ("csmp", "CSMP do MPGO",
      '("Conselho Superior" OR CSMP) (MPGO OR "MP-GO" OR "Ministério Público de Goiás" OR "MP de Goiás") when:60d'),
+    ("mp", "Ministério Público Brasileiro", '"Ministério Público" when:2d'),
+    ("stf", "STF", "STF when:2d"),
+    ("stj", "STJ", "STJ when:3d"),
+    ("tjgo", "TJGO", '(TJGO OR "TJ-GO" OR "Tribunal de Justiça de Goiás") when:7d'),
 ]
 
 # Notícias locais: um quadro para Ceres e outro para as demais cidades do Vale do São Patrício.
@@ -394,6 +397,79 @@ def buscar_google_noticias(busca):
     return noticias
 
 
+# --- De qual Ministério Público trata a notícia (quadro "Ministério Público Brasileiro") ---
+
+# Ramos do Ministério Público da União e afins: (sigla, nome, padrão)
+RAMOS_MPU = [
+    ("MPDFT", "DF e Territórios", r"\bMPDFT\b|Minist[ée]rio P[úu]blico do Distrito Federal"),
+    ("MPT", "Trabalho", r"\bMPT\b|Minist[ée]rio P[úu]blico do Trabalho"),
+    ("MPM", "Militar", r"\bMPM\b|Minist[ée]rio P[úu]blico Militar"),
+    ("MP Eleitoral", "Eleitoral", r"Minist[ée]rio P[úu]blico Eleitoral|\bMPE\b"),
+    ("MP de Contas", "Contas", r"Minist[ée]rio P[úu]blico (?:de|junto ao) (?:Contas|Tribunal de Contas)|\bMPC\b"),
+    ("MPF", "Federal", r"\bMPF\b|Minist[ée]rio P[úu]blico Federal|\bPGR\b|Procuradoria-Geral da Rep[úu]blica"),
+]
+
+# Estados: (UF, nome, outros termos: capital, cidades grandes e gentílico). Nomes compostos
+# vêm antes dos que contêm ("Mato Grosso do Sul" antes de "Mato Grosso"). Ficam de fora
+# cidades com nome ambíguo, como Natal (o feriado), Vitória e Santos
+ESTADOS = [
+    ("MS", "Mato Grosso do Sul", ["Campo Grande", "sul-mato-grossense"]),
+    ("MT", "Mato Grosso", ["Cuiabá", "mato-grossense"]),
+    ("RN", "Rio Grande do Norte", ["potiguar"]),
+    ("RS", "Rio Grande do Sul", ["Porto Alegre", "gaúcho", "gaúcha"]),
+    ("RJ", "Rio de Janeiro", ["fluminense", "carioca", "Niterói"]),
+    ("ES", "Espírito Santo", ["capixaba"]),
+    ("SP", "São Paulo", ["paulista", "Campinas", "Ribeirão Preto"]),
+    ("MG", "Minas Gerais", ["Belo Horizonte", "mineiro", "mineira"]),
+    ("BA", "Bahia", ["Salvador", "baiano", "baiana"]),
+    ("PR", "Paraná", ["Curitiba", "paranaense", "Londrina"]),
+    ("SC", "Santa Catarina", ["Florianópolis", "catarinense", "Joinville"]),
+    ("GO", "Goiás", ["Goiânia", "goiano", "goiana", "Anápolis"]),
+    ("DF", "Distrito Federal", ["Brasília", "brasiliense"]),
+    ("PE", "Pernambuco", ["Recife", "pernambucano", "pernambucana"]),
+    ("CE", "Ceará", ["Fortaleza", "cearense"]),
+    ("PA", "Pará", ["Belém", "paraense"]),
+    ("AM", "Amazonas", ["Manaus", "amazonense"]),
+    ("MA", "Maranhão", ["São Luís", "maranhense"]),
+    ("PI", "Piauí", ["Teresina", "piauiense"]),
+    ("PB", "Paraíba", ["João Pessoa", "paraibano", "paraibana"]),
+    ("AL", "Alagoas", ["Maceió", "alagoano", "alagoana"]),
+    ("SE", "Sergipe", ["Aracaju", "sergipano", "sergipana"]),
+    ("TO", "Tocantins", ["Palmas", "tocantinense"]),
+    ("RO", "Rondônia", ["Porto Velho", "rondoniense"]),
+    ("AC", "Acre", ["Rio Branco", "acreano", "acriano"]),
+    ("AP", "Amapá", ["Macapá", "amapaense"]),
+    ("RR", "Roraima", ["Boa Vista", "roraimense"]),
+]
+_PADROES_ESTADOS = [
+    (uf, nome,
+     re.compile(rf"\bMP-?{uf}\b|\bMPE-?{uf}\b|Minist[ée]rio P[úu]blico (?:do Estado )?(?:d[eoa] )?{nome}"),
+     # nome do estado, cidades e a sigla depois de preposição ("vice-prefeito de SP"): com
+     # maiúscula e palavra inteira (para "Pará" não pegar "para")
+     re.compile(r"\b(?:" + "|".join(re.escape(t) for t in [nome] + [o for o in outros if o[0].isupper()])
+                + rf"|(?:de|do|da|em|no|na) {uf})\b"),
+     # gentílicos ("paulista", "Associação Paulista..."): sem diferenciar maiúscula. Sem nenhum,
+     # o padrão nunca casa (um "(?:)" vazio casaria com qualquer texto)
+     re.compile(r"\b(?:" + ("|".join(re.escape(o) for o in outros if o[0].islower()) or r"(?!x)x") + r")\b", re.I))
+    for uf, nome, outros in ESTADOS
+]
+
+
+def identificar_mp(noticia):
+    """{"sigla", "nome"} do MP de que a notícia trata, ou None se não der para saber."""
+    texto = f"{noticia['titulo']} {noticia['fonte']}"
+    for uf, nome, explicito, _, _ in _PADROES_ESTADOS:  # sigla ou nome do MP estadual
+        if explicito.search(texto):
+            return {"sigla": f"MP{uf}", "nome": nome}
+    for sigla, nome, padrao in RAMOS_MPU:
+        if re.search(padrao, texto):
+            return {"sigla": sigla, "nome": nome}
+    for uf, nome, _, local, gentilico in _PADROES_ESTADOS:  # só o estado, a cidade ou o gentílico
+        if local.search(texto) or gentilico.search(texto):
+            return {"sigla": f"MP{uf}", "nome": nome}
+    return None
+
+
 def escolher_juridicas(noticias):
     """As POR_SECAO principais de uma busca jurídica, pelo mesmo critério das editorias."""
     limite = (datetime.now(timezone.utc) - JANELA_RECENTES).isoformat()
@@ -402,11 +478,21 @@ def escolher_juridicas(noticias):
     return [_montar(noticias, principal, por_fonte) for _, principal, por_fonte in candidatos[:POR_SECAO]]
 
 
+def _resultado_ou_none(futuro, nome):
+    try:
+        return futuro.result()
+    except Exception as erro:  # sem essa parte, o resto do site continua
+        print(f"[coletor] Falha em {nome}: {erro}")
+        return None
+
+
 def coletar():
     """Busca todos os feeds em paralelo e devolve as principais notícias de cada editoria."""
     with ThreadPoolExecutor(max_workers=10) as executor:
         futuros = [executor.submit(buscar_feed, *feed) for feed in FEEDS]
         futuros_juridico = [executor.submit(buscar_google_noticias, busca) for _, _, busca in JURIDICO]
+        futuro_informativos = executor.submit(informativos.coletar)
+        futuro_editais = executor.submit(editais.coletar)
         futuros_regional = [
             [executor.submit(buscar_google_noticias, busca) for busca in buscas] for _, _, buscas in REGIONAL
         ]
@@ -435,6 +521,9 @@ def coletar():
             print(f"[coletor] Falha na busca jurídica {nome}: {erro}")
             falhas.append(f"Google Notícias: {nome}")
             escolhidas = []
+        if id_ == "mp":
+            for noticia in escolhidas:
+                noticia["mp"] = identificar_mp(noticia)
         juridico.append({"id": id_, "nome": nome, "noticias": escolhidas})
 
     # Uma notícia que sai nas duas buscas fica só no quadro de Ceres (o primeiro)
@@ -463,6 +552,8 @@ def coletar():
         "secoes": escolher_principais(noticias),
         "juridico": juridico,
         "regional": regional,
+        "informativos": futuro_informativos.result(),
+        "editais": _resultado_ou_none(futuro_editais, "editais do MPGO"),
     }
 
 

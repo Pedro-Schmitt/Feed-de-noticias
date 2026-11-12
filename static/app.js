@@ -149,11 +149,78 @@ function destaqueELista(lista, textoVazio, comImagens = true) {
 
 function itemJuridico(n) {
   const item = elemento("li");
-  item.append(link(n, linhaMeta(n), elemento("h3", "", n.titulo)));
+  const titulo = elemento("h3");
+  // Quadro "Ministério Público Brasileiro": de qual MP (estado ou ramo federal) é a notícia
+  if ("mp" in n) {
+    const etiqueta = n.mp
+      ? elemento("span", "etiqueta", n.mp.sigla === n.mp.nome ? n.mp.sigla : `${n.mp.sigla} · ${n.mp.nome}`)
+      : elemento("span", "etiqueta indefinido", "MP não identificado");
+    titulo.append(etiqueta, " ");
+  }
+  titulo.append(n.titulo);
+  item.append(link(n, linhaMeta(n), titulo));
   return item;
 }
 
 /** Um painel por órgão (STF, STJ, TJGO, CSMP), com cinco notícias só em texto. */
+const ORDEM_ENTRANCIAS = ["Procuradoria de Justiça", "Entrância final", "Entrância intermediária", "Entrância inicial"];
+
+/** Editais de promoção e remoção com inscrições abertas (quadro MPGO), agrupados por entrância. */
+function blocoEditais(dados) {
+  const bloco = elemento("div", "editais");
+  bloco.append(elemento("h3", "titulo-agenda", "Editais de promoção e remoção abertos"));
+  if (!dados) {
+    bloco.append(elemento("p", "vazio", "Não foi possível consultar os editais agora."));
+    return bloco;
+  }
+  const { abertos } = dados;
+  if (!abertos.length) {
+    bloco.append(elemento("p", "vazio", "Nenhum edital com inscrições abertas no momento."));
+  } else {
+    const fins = [...new Set(abertos.map((e) => e.fim))].sort();
+    const prazo = fins.length === 1
+      ? `inscrições até ${dataCurta(fins[0])}`
+      : `inscrições até ${dataCurta(fins[0])} a ${dataCurta(fins[fins.length - 1])}`;
+    bloco.append(elemento("p", "editais-resumo", `${abertos.length} ${abertos.length === 1 ? "edital aberto" : "editais abertos"} · ${prazo}`));
+
+    const lista = elemento("div", "editais-lista");
+    for (const entrancia of ORDEM_ENTRANCIAS.concat(abertos.map((e) => e.entrancia))) {
+      const doGrupo = abertos.filter((e) => e.entrancia === entrancia);
+      if (!doGrupo.length || lista.querySelector(`[data-entrancia="${entrancia}"]`)) continue;
+      const grupo = elemento("div", "editais-grupo");
+      grupo.dataset.entrancia = entrancia;
+      grupo.append(elemento("h4", "", `${entrancia || "Outros"} (${doGrupo.length})`));
+      const ul = elemento("ul");
+      for (const e of doGrupo) {
+        const li = elemento("li");
+        const vaga = linkExterno(e.link, e.vaga || `Edital ${e.numero}`);
+        vaga.title = `Edital n. ${e.numero} · publicado em ${dataCurta(e.publicado)} · inscrições até ${dataCurta(e.fim)}`;
+        const detalhe = elemento("span", "edital-criterio", e.criterio + (e.subsidiario ? ` (subsidiário: ${e.subsidiario.toLowerCase()})` : ""));
+        li.append(vaga, detalhe);
+        if (e.dificil_provimento) li.append(elemento("span", "etiqueta", "Difícil provimento"));
+        if (fins.length > 1) li.append(elemento("span", "edital-criterio", `até ${dataCurta(e.fim)}`));
+        ul.append(li);
+      }
+      grupo.append(ul);
+      lista.append(grupo);
+    }
+    bloco.append(lista);
+    bloco.append(elemento("p", "nota", "Prazo calculado pelo site (10 dias corridos a partir do 1º dia útil após a publicação); confira no edital."));
+  }
+  const todos = elemento("p", "editais-resumo");
+  todos.append(linkExterno(dados.pagina, "Todos os editais do ano no portal do MPGO"));
+  bloco.append(todos);
+  return bloco;
+}
+
+// Links fixos no fim de alguns quadros jurídicos
+const LINKS_JURIDICO = {
+  mpgo: [
+    ["Acessar todas as notícias do Portal do MPGO", "https://www.mpgo.mp.br/portal/noticias"],
+    ["Acessar todas as notícias na Intranet do MPGO", "https://intranet.mpgo.mp.br/olimpo/news?category=ascom"],
+  ],
+};
+
 function montarJuridico() {
   const container = document.getElementById("juridico");
   container.replaceChildren();
@@ -176,9 +243,90 @@ function montarJuridico() {
       agenda.append(elemento("h3", "titulo-agenda", "Em julgamento"), elemento("div", "agenda-corpo"));
       painel.append(agenda);
     }
+    if (orgao.id === "mpgo") painel.append(blocoEditais(noticias.editais));
+    if (LINKS_JURIDICO[orgao.id]) {
+      const links = elemento("div", "links-quadro");
+      for (const [texto, href] of LINKS_JURIDICO[orgao.id]) links.append(linkExterno(href, texto));
+      painel.append(links);
+    }
     container.append(painel);
   }
   preencherAgendas();
+}
+
+const NOMES_MARCAS = {
+  importante: "⭐ Julgado importante",
+  repetitivo: "🏛️ Repetitivo / repercussão geral",
+  mudanca: "🔄 Mudança de entendimento",
+};
+
+/** Link do julgado: o PDF completo já na página dele (ou o post, se não houver PDF). */
+function linkJulgado(info, julgado, ...conteudo) {
+  const href = info.pdf ? `${info.pdf}${julgado.pagina ? `#page=${julgado.pagina}` : ""}` : info.link;
+  return link({ link: href }, ...conteudo);
+}
+
+/** Só a data: o horário que o feed traz é sempre 00:30, então não diz nada. */
+function dataPublicacao(iso) {
+  const dia = (d) => d.toLocaleDateString("pt-BR");
+  const data = new Date(iso);
+  const ontem = new Date(Date.now() - 86400000);
+  if (dia(data) === dia(new Date())) return "hoje";
+  if (dia(data) === dia(ontem)) return "ontem";
+  return `em ${dia(data)}`;
+}
+
+function blocoInformativo(info) {
+  const bloco = elemento("div", "informativo-bloco");
+  const titulo = elemento("p", "informativo-titulo");
+  if (info.novo) titulo.append(elemento("span", "etiqueta andamento", "Novo"));
+  titulo.append(`Informativo ${info.numero} · publicado ${dataPublicacao(info.data)}`);
+  const resumo = info.julgados_mp.length
+    ? `${info.julgados_mp.length} de ${info.total} julgados de interesse do MP estadual`
+    : `Nenhum dos ${info.total} julgados tem relação direta com a atuação do MP estadual`;
+  const ler = elemento("p", "informativo-resumo", `${resumo} · `);
+  ler.append(link(info, "Ler no Dizer o Direito"));
+  if (info.pdf) ler.append(" · ", link({ link: info.pdf }, "PDF completo"));
+  bloco.append(titulo, ler);
+
+  if (info.julgados_mp.length) {
+    const lista = elemento("ul", "julgados");
+    for (const j of info.julgados_mp) {
+      const item = elemento("li", j.marcas.includes("importante") ? "destacado" : "");
+      const tese = linkJulgado(info, j, j.tese);
+      tese.className = "julgado-tese";
+      tese.title = j.pagina ? `Abrir o PDF completo na página ${j.pagina}` : "Abrir o PDF completo";
+      item.append(elemento("p", "julgado-tema", [j.ramo, j.assunto].filter(Boolean).join(" · ")), tese);
+      const etiquetas = elemento("div", "julgado-etiquetas");
+      for (const motivo of j.interesse_mp) etiquetas.append(elemento("span", "etiqueta", motivo));
+      for (const marca of j.marcas) etiquetas.append(elemento("span", "marca", NOMES_MARCAS[marca]));
+      if (j.pagina) etiquetas.append(linkJulgado(info, j, `Ver no PDF (p. ${j.pagina})`));
+      item.append(etiquetas);
+      lista.append(item);
+    }
+    bloco.append(lista);
+  }
+  return bloco;
+}
+
+function montarInformativos() {
+  const container = document.getElementById("informativos");
+  container.replaceChildren();
+  for (const [id, nome] of [["stf", "STF"], ["stj", "STJ"]]) {
+    const lista = noticias.informativos?.[id];
+    const painel = elemento("section", "painel secao informativo");
+    painel.style.setProperty("--cor", CORES_SECOES[id]);
+    painel.append(elemento("h2", "", `Informativos do ${nome}`));
+    if (!lista?.length) {
+      painel.append(elemento("p", "vazio", "Não foi possível consultar o Dizer o Direito agora."));
+    } else {
+      // Os três informativos rolam dentro do quadro, para a página não ficar comprida
+      const corpo = elemento("div", "informativo-corpo");
+      lista.forEach((info) => corpo.append(blocoInformativo(info)));
+      painel.append(corpo);
+    }
+    container.append(painel);
+  }
 }
 
 function montarRegional() {
@@ -212,6 +360,7 @@ async function carregarNoticias() {
   montarSecoes();
   montarJuridico();
   montarRegional();
+  montarInformativos();
   atualizarSubtitulo();
 }
 

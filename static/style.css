@@ -110,7 +110,8 @@ a { color: inherit; text-decoration: none; }
 .area-cabecalho h2 { margin: 0 0 2px; font-size: 1.6rem; color: var(--cor-area); }
 .area-numero { width: 40px; height: 40px; font-size: 1.2rem; flex: none; }
 
-.subtitulo-area { margin: 22px 0 2px; font-size: 1.15rem; }
+.subtitulo-area { margin: 28px 0 10px; font-size: 1.2rem; }
+.subtitulo-area + .nota { margin: -6px 0 10px; }
 .area-cabecalho + .subtitulo-area { margin-top: 0; }
 
 /* --- Editorias: cinco notícias principais de cada --- */
@@ -288,6 +289,50 @@ a { color: inherit; text-decoration: none; }
 .juridicas li:last-child a { border-bottom: 0; }
 .juridicas a:hover { background: color-mix(in srgb, var(--texto) 5%, transparent); }
 .juridicas h3 { margin: 0; font-size: 0.9rem; line-height: 1.35; font-weight: 600; }
+/* Editais de promoção e remoção abertos (quadro MPGO) */
+.editais { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--borda); }
+.editais-resumo { margin: 0 0 8px; font-size: 0.85rem; font-weight: 600; }
+.editais-resumo a { color: var(--cor); }
+.editais-resumo a:hover { text-decoration: underline; }
+.editais .nota { font-size: 0.75rem; margin: 6px 0 8px; }
+
+.editais-lista { max-height: 320px; overflow-y: auto; padding-right: 6px; }
+.editais-grupo h4 {
+  margin: 8px 0 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--suave);
+}
+.editais-grupo ul { list-style: none; margin: 0; padding: 0; }
+.editais-grupo li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--borda);
+  font-size: 0.85rem;
+}
+.editais-grupo li a { font-weight: 600; }
+.editais-grupo li a:hover { text-decoration: underline; }
+.edital-criterio { font-size: 0.75rem; color: var(--suave); }
+
+/* Links fixos no fim de um quadro (ex.: todas as notícias do MPGO) */
+.links-quadro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--borda);
+}
+
+.links-quadro a { font-size: 0.85rem; font-weight: 600; color: var(--cor); }
+.links-quadro a::after { content: " →"; }
+.links-quadro a:hover { text-decoration: underline; }
+
 /* Agenda do STF e do CSMP dentro do painel de notícias */
 .agenda-juridica {
   margin-top: 8px;
@@ -302,6 +347,44 @@ a { color: inherit; text-decoration: none; }
 }
 
 .agenda-juridica .agenda-corpo { max-height: 420px; }
+
+/* --- Informativos do STF e do STJ --- */
+
+
+/* Os três informativos de cada tribunal rolam dentro do quadro */
+.informativo-corpo {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.informativo-bloco { padding: 12px 0 4px; border-top: 1px solid var(--borda); }
+.informativo-bloco:first-of-type { border-top: 0; padding-top: 2px; }
+.informativo-titulo { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.informativo-resumo { margin: 4px 0 0; font-size: 0.85rem; color: var(--suave); }
+.informativo-resumo a { color: var(--cor); font-weight: 600; }
+.informativo-resumo a:hover { text-decoration: underline; }
+
+.julgados { list-style: none; margin: 0; padding: 0; }
+.julgados { margin-top: 6px; }
+.julgados li { padding: 10px 4px; border-bottom: 1px solid var(--borda); }
+.julgados li:last-child { border-bottom: 0; }
+.julgados li.destacado { border-left: 3px solid var(--cor); padding-left: 10px; }
+
+.julgado-tema {
+  margin: 0 0 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--suave);
+}
+
+.julgado-tese { display: block; margin: 0; font-size: 0.92rem; line-height: 1.45; }
+a.julgado-tese:hover { text-decoration: underline; }
+.julgado-etiquetas a { font-size: 0.75rem; font-weight: 600; color: var(--cor); }
+.julgado-etiquetas a:hover { text-decoration: underline; }
+.julgado-etiquetas { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
+.marca { font-size: 0.72rem; color: var(--suave); }
 
 /* --- Agendas --- */
 
@@ -377,6 +460,7 @@ a { color: inherit; text-decoration: none; }
   vertical-align: 1px;
 }
 
+.etiqueta.indefinido { color: var(--suave); border-color: var(--borda); }
 .etiqueta.andamento { color: #fff; background: var(--cor); border-color: var(--cor); }
 
 .materias { margin: 6px 0 0; padding-left: 16px; font-size: 0.78rem; color: var(--suave); }

@@ -2,7 +2,7 @@
 
 Site em Python que mostra as **cinco principais notícias de Política, Economia, Tecnologia e Mundo**, a partir dos feeds RSS dos maiores veículos do país, e logo abaixo os **gráficos de cotação em R$** do dólar, euro, bitcoin, ethereum, Tron e Tether (filtros de 5 anos a 1 dia).
 
-Há também um bloco de **notícias jurídicas** com as cinco principais sobre o STF, o STJ, o TJGO, o Ministério Público brasileiro, o Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP). Como esses órgãos não têm feed RSS acessível, as notícias vêm de buscas no Google Notícias (lista em `JURIDICO`, em `coletor.py`), que juntam os sites oficiais e a imprensa.
+Há também um bloco de **notícias jurídicas** com as cinco principais sobre o STF, o STJ, o TJGO, o Ministério Público Brasileiro (cada notícia com a etiqueta do MP de que trata: estadual, como MPSP, ou ramo do MPU, como MPF e MPT), o Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP). Como esses órgãos não têm feed RSS acessível, as notícias vêm de buscas no Google Notícias (lista em `JURIDICO`, em `coletor.py`), que juntam os sites oficiais e a imprensa.
 
 As agendas (`agendas.py`) vêm direto das fontes oficiais. O que está em julgamento no STF e no CSMP aparece dentro dos painéis de notícias desses órgãos; o bloco **Agendas** traz as do Presidente, do Senado e da Câmara:
 
@@ -14,9 +14,13 @@ As agendas (`agendas.py`) vêm direto das fontes oficiais. O que está em julgam
 
 Senado e Câmara mostram o próximo dia com agenda quando não há nada hoje (ex.: fim de semana). Se uma fonte falhar, só aquele painel mostra um aviso.
 
+No quadro do **MPGO** aparecem também os **editais de promoção e remoção com inscrições abertas** (`editais.py`): o site lê a página de editais do ano no portal do MPGO, abre o PDF dos editais recentes e tira a promotoria, a entrância, a forma e o critério de provimento, a data de publicação no Diário Oficial e o prazo (10 dias corridos a partir do 1º dia útil seguinte). O fim do prazo é calculado pelo site considerando fins de semana e feriados nacionais fixos.
+
+A área **Jurisprudência**, no topo da página, mostra os três últimos informativos comentados de cada tribunal no Dizer o Direito (`informativos.py`, pelo feed do Blogger), avisa se são novos (últimos 7 dias) e lista os julgados que interessam ao Ministério Público estadual. Cada julgado abre o PDF da versão completa já na página dele (`#page=N`), localizada procurando o começo da tese no texto do PDF. A indicação é automática, por regras de tema: o julgado cita o MP ou é de área típica de atuação do MP (penal, improbidade, ação civil pública, meio ambiente, consumidor, infância e juventude, violência doméstica, saúde, eleitoral, patrimônio público, idoso e pessoa com deficiência).
+
 A área de notícias locais tem dois quadros, **Ceres** e **Vale do São Patrício**, cada um com as cinco principais notícias dos últimos 10 dias; o do Vale cobre as demais cidades (Rialma, Rubiataba, Goianésia, Itapaci, Itapuranga, Uruana e outras; lista em `CIDADES_VALE`, em `coletor.py`), também por buscas no Google Notícias.
 
-A página é dividida em quatro áreas: 1) Notícias Gerais, 2) Notícias Locais de Ceres e Vale do São Patrício, 3) Notícias do Mundo Jurídico e Agenda dos Órgãos e 4) Cotações das Principais Moedas.
+A página é dividida em quatro áreas: **Jurisprudência** (informativos do STF e do STJ), **Notícias** (jurídicas: MPGO, CSMP, Ministério Público Brasileiro, STF, STJ e TJGO; agendas do Presidente, do Senado e da Câmara; gerais), **Notícias específicas da sua região** (Ceres e Vale do São Patrício) e **Cotações**.
 
 As principais de cada editoria são os assuntos noticiados por mais veículos (ex.: "em 4 veículos"); no empate, vale o mais recente, e os assuntos das últimas 24 horas vêm antes. A primeira notícia de cada editoria traz links para a versão dos outros veículos. Notícias de esportes ficam de fora.
 
