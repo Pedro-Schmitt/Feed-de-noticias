@@ -28,6 +28,10 @@ LISTA_PROMOTORIAS = ("https://www.mpgo.mp.br/portal/arquivos/2024/09/25/14_38_13
                      "Justi_a_Minist_rio_P_blico_de_Goi_s.html_25_9_2024.html")
 IBGE_GOIAS = "https://servicodados.ibge.gov.br/api/v1/localidades/estados/52/municipios?view=nivelado"
 IBGE_BRASIL = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios?view=nivelado"
+# Cópia dos dados do IBGE guardada no projeto: a API do IBGE não responde aos servidores do
+# GitHub Actions (fora do Brasil). Municípios e regiões quase nunca mudam; para atualizar,
+# rode "python regional.py --atualizar-ibge" num computador no Brasil
+ARQUIVO_IBGE = Path(__file__).with_name("dados") / "ibge_municipios.json"
 SITE_PUBLICADO = os.environ.get("SITE_PUBLICADO", "https://feed-de-atualizacoes---pedro.web.app")
 
 JANELA = timedelta(days=10)
@@ -97,9 +101,9 @@ def montar_mapa():
     {"promotorias": [{nome, comarca}], "comarcas": {comarca: {cidade, regiao}},
      "locais": {id: {nome, tipo, buscas}}}
     """
-    goias = _get(IBGE_GOIAS).json()
-    brasil = _get(IBGE_BRASIL).json()
-    fora_de_goias = {_sem_acento(m["municipio-nome"]) for m in brasil if m["UF-sigla"] != "GO"}
+    ibge = json.loads(ARQUIVO_IBGE.read_text(encoding="utf-8"))
+    goias = ibge["goias"]
+    fora_de_goias = set(ibge["nomes_fora_de_goias"])
     municipios = {_sem_acento(m["municipio-nome"]): m for m in goias}
 
     def ambiguo(nome):
@@ -223,7 +227,25 @@ def gerar(saida):
     escrever(Path(saida) / "promotorias.json", dados_promotorias(mapa))
 
 
+def atualizar_ibge():
+    """Baixa do IBGE os municípios de Goiás (com a região imediata) e os nomes dos demais."""
+    goias = _get(IBGE_GOIAS).json()
+    brasil = _get(IBGE_BRASIL).json()
+    dados = {
+        "goias": [{"municipio-nome": m["municipio-nome"], "regiao-imediata-nome": m["regiao-imediata-nome"]}
+                  for m in goias],
+        "nomes_fora_de_goias": sorted({_sem_acento(m["municipio-nome"]) for m in brasil if m["UF-sigla"] != "GO"}),
+    }
+    ARQUIVO_IBGE.parent.mkdir(exist_ok=True)
+    ARQUIVO_IBGE.write_text(json.dumps(dados, ensure_ascii=False, indent=0), encoding="utf-8")
+    print(f"[regional] {len(dados['goias'])} municípios de Goiás gravados em {ARQUIVO_IBGE}")
+
+
 if __name__ == "__main__":
+    import sys
+    if "--atualizar-ibge" in sys.argv:
+        atualizar_ibge()
+        sys.exit()
     mapa = montar_mapa()
     print(len(mapa["promotorias"]), "promotorias,", len(mapa["comarcas"]), "comarcas,",
           len(mapa["locais"]), "locais,", sum(len(l["buscas"]) for l in mapa["locais"].values()), "buscas no total")
