@@ -427,22 +427,6 @@ a { color: inherit; text-decoration: none; }
 .seletor-promotoria[hidden] { display: none; }  /* o display: flex acima anularia o hidden */
 .seletor-promotoria label { font-weight: 600; }
 
-.campo-com-botao { display: flex; gap: 8px; }
-.campo-com-botao input { flex: 1; min-width: 0; }
-
-.botao-ir {
-  font: inherit;
-  font-weight: 600;
-  padding: 10px 22px;
-  border-radius: 10px;
-  border: 0;
-  background: var(--cor-area);
-  color: #fff;
-  cursor: pointer;
-}
-
-.botao-ir:hover { filter: brightness(1.1); }
-
 .seletor-promotoria input {
   font: inherit;
   padding: 10px 14px;

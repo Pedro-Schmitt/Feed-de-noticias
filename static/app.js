@@ -349,6 +349,11 @@ let mapaPromotorias = null;
 let promotoriaAtual = null;
 let filtroJurisprudencia = "promotoria";
 
+/** Texto em minúsculas e sem acentos, para comparar o que foi digitado com a lista. */
+function semAcento(texto) {
+  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
 function nomeSalvo() {
   try {
     return JSON.parse(localStorage.getItem(CHAVE_PROMOTORIA))?.nome || null;
@@ -479,7 +484,6 @@ async function iniciarPromotoria() {
   const campo = document.getElementById("campo-promotoria");
   campo.addEventListener("change", escolherPromotoria);
   campo.addEventListener("keydown", (e) => { if (e.key === "Enter") escolherPromotoria(); });
-  document.getElementById("ir-promotoria").addEventListener("click", escolherPromotoria);
   document.getElementById("trocar-promotoria").addEventListener("click", pedirPromotoria);
 
   // Promotoria salva numa visita anterior (com os dados atuais da lista oficial)
