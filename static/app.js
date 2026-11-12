@@ -154,6 +154,8 @@ function destaqueELista(lista, textoVazio, comImagens = true) {
   botao.type = "button";
   botao.addEventListener("click", () => {
     const abrir = !outras.classList.contains("expandida");
+    // A lista aberta fica com a mesma altura da fechada e rola por dentro: o quadro não muda de tamanho
+    outras.style.height = abrir ? `${outras.offsetHeight}px` : "";
     outras.classList.toggle("expandida", abrir);
     [...outras.children].forEach((li, i) => { li.hidden = !abrir && i >= VISIVEIS - 1; });
     botao.textContent = abrir ? "Mostrar menos" : "Carregar mais notícias";

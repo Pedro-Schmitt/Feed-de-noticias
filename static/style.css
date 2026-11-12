@@ -259,25 +259,23 @@ a { color: inherit; text-decoration: none; }
 .outras li:last-child a { border-bottom: 0; }
 .outras li[hidden] { display: none; }
 
-/* Lista aberta pelo "Carregar mais notícias": rola dentro do quadro */
-.outras.expandida { max-height: 520px; overflow-y: auto; padding-right: 4px; }
+/* Lista aberta pelo "Carregar mais notícias": mesma altura da fechada (fixada no clique), rolando por dentro */
+.outras.expandida { overflow-y: auto; padding-right: 4px; }
 
+/* Botão discreto, como um link */
 .carregar-mais {
   display: block;
-  width: 100%;
-  margin-top: 10px;
-  padding: 9px 12px;
+  margin: 8px auto 0;
+  padding: 4px 8px;
   font: inherit;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--cor);
-  background: color-mix(in srgb, var(--cor) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--cor) 35%, transparent);
-  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--suave);
+  background: none;
+  border: 0;
   cursor: pointer;
 }
 
-.carregar-mais:hover { background: color-mix(in srgb, var(--cor) 18%, transparent); }
+.carregar-mais:hover { color: var(--texto); text-decoration: underline; }
 .outras a:hover { background: color-mix(in srgb, var(--texto) 5%, transparent); }
 .outras .imagem { width: 104px; flex: none; aspect-ratio: 16 / 10; border-radius: 6px; font-size: 0.8rem; }
 .outras .corpo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
