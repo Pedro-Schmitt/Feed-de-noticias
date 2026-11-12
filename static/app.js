@@ -224,6 +224,7 @@ const LINKS_JURIDICO = {
 function montarJuridico() {
   const container = document.getElementById("juridico");
   container.replaceChildren();
+  const paineis = {};
   for (const orgao of noticias.juridico || []) {
     const painel = elemento("section", "painel secao");
     painel.style.setProperty("--cor", CORES_SECOES[orgao.id] || "#6b7280");
@@ -249,9 +250,39 @@ function montarJuridico() {
       for (const [texto, href] of LINKS_JURIDICO[orgao.id]) links.append(linkExterno(href, texto));
       painel.append(links);
     }
+    paineis[orgao.id] = painel;
     container.append(painel);
   }
+  // O MPGO ocupa a linha inteira: as notícias dele à esquerda e o quadro do CSMP à direita
+  const { mpgo, csmp } = paineis;
+  if (mpgo) {
+    mpgo.classList.add("painel-mpgo");
+    const principal = elemento("div", "mpgo-principal");
+    principal.append(...[...mpgo.children].slice(1)); // tudo menos o título
+    const colunas = elemento("div", "mpgo-colunas");
+    colunas.append(principal);
+    if (csmp) {
+      csmp.classList.add("painel-interno");
+      colunas.append(csmp);
+    }
+    mpgo.append(colunas);
+  }
   preencherAgendas();
+}
+
+/** As três principais notícias do Presidente, do Senado e da Câmara, acima da agenda de cada um. */
+function montarOrgaos() {
+  for (const bloco of document.querySelectorAll("[data-orgao]")) {
+    const lista = (noticias.orgaos || {})[bloco.dataset.orgao];
+    bloco.replaceChildren(elemento("h3", "titulo-agenda", "Principais notícias"));
+    if (!lista?.length) {
+      bloco.append(elemento("p", "vazio", lista ? "Nenhuma notícia recente." : "Não foi possível carregar as notícias agora."));
+      continue;
+    }
+    const ul = elemento("ul", "juridicas");
+    lista.forEach((n) => ul.append(itemJuridico(n)));
+    bloco.append(ul);
+  }
 }
 
 const NOMES_MARCAS = {
@@ -514,6 +545,7 @@ async function carregarNoticias() {
   }
   montarSecoes();
   montarJuridico();
+  montarOrgaos();
   montarInformativos();
   atualizarSubtitulo();
 }

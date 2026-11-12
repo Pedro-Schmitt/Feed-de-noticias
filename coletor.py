@@ -319,6 +319,14 @@ JURIDICO = [
     ("tjgo", "TJGO", '(TJGO OR "TJ-GO" OR "Tribunal de Justiça de Goiás") when:7d'),
 ]
 
+# Notícias que vão acima da agenda do Presidente, do Senado e da Câmara (mesmo critério das jurídicas)
+ORGAOS = [
+    ("presidente", '(Lula OR "Presidente da República" OR Planalto) when:2d'),
+    ("senado", '(Senado OR senadores) when:2d'),
+    ("camara", '("Câmara dos Deputados" OR deputados) when:2d'),
+]
+POR_ORGAO = 3
+
 
 
 FONTES_IGNORADAS = {"Instagram", "Facebook", "YouTube", "X", "TikTok", "LinkedIn"}
@@ -464,6 +472,7 @@ def coletar():
     with ThreadPoolExecutor(max_workers=10) as executor:
         futuros = [executor.submit(buscar_feed, *feed) for feed in FEEDS]
         futuros_juridico = [executor.submit(buscar_google_noticias, busca) for _, _, busca in JURIDICO]
+        futuros_orgaos = [executor.submit(buscar_google_noticias, busca) for _, busca in ORGAOS]
         futuro_informativos = executor.submit(informativos.coletar)
         futuro_editais = executor.submit(editais.coletar)
 
@@ -496,6 +505,14 @@ def coletar():
                 noticia["mp"] = identificar_mp(noticia)
         juridico.append({"id": id_, "nome": nome, "noticias": escolhidas})
 
+    orgaos = {}
+    for (id_, _), futuro in zip(ORGAOS, futuros_orgaos):
+        try:
+            orgaos[id_] = escolher_juridicas(futuro.result())[:POR_ORGAO]
+        except Exception as erro:  # sem notícias, o quadro mostra só a agenda
+            print(f"[coletor] Falha nas notícias de {id_}: {erro}")
+            orgaos[id_] = None
+
     return {
         "atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "fontes": sorted({veiculo for veiculo, _, _ in FEEDS}),
@@ -504,6 +521,7 @@ def coletar():
         "falhas": falhas,
         "secoes": escolher_principais(noticias),
         "juridico": juridico,
+        "orgaos": orgaos,
         "informativos": futuro_informativos.result(),
         "editais": _resultado_ou_none(futuro_editais, "editais do MPGO"),
     }

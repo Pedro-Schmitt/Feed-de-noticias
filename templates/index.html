@@ -19,7 +19,7 @@
 <body>
   <header>
     <div class="topo">
-      <div>
+      <div class="titulo-linha">
         <h1>Revista do Promotor</h1>
         <p id="subtitulo">Carregando notícias…</p>
       </div>
@@ -72,7 +72,6 @@
         </div>
       </header>
 
-      <h3 class="subtitulo-area">Jurídicas</h3>
       <div id="juridico" class="grade-juridico"></div>
 
       <h3 class="subtitulo-area">Agendas dos órgãos</h3>
@@ -80,19 +79,24 @@
       <div class="grade-agendas grade-agendas-3">
         <section class="painel secao agenda" data-agenda="presidente" style="--cor: #e0352b">
           <h2>Presidente da República</h2>
+          <div class="noticias-orgao" data-orgao="presidente"></div>
+          <h3 class="titulo-agenda">Agenda</h3>
           <div class="agenda-corpo"></div>
         </section>
         <section class="painel secao agenda" data-agenda="senado" style="--cor: #2f6fdb">
           <h2>Senado Federal</h2>
+          <div class="noticias-orgao" data-orgao="senado"></div>
+          <h3 class="titulo-agenda">Agenda</h3>
           <div class="agenda-corpo"></div>
         </section>
         <section class="painel secao agenda" data-agenda="camara" style="--cor: #0f9d58">
           <h2>Câmara dos Deputados</h2>
+          <div class="noticias-orgao" data-orgao="camara"></div>
+          <h3 class="titulo-agenda">Agenda</h3>
           <div class="agenda-corpo"></div>
         </section>
       </div>
 
-      <h3 class="subtitulo-area">Gerais</h3>
       <div id="secoes" class="secoes"></div>
     </section>
 
