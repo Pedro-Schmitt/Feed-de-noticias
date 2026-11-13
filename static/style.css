@@ -762,3 +762,9 @@ footer { padding-bottom: 24px; }
   .lider { grid-template-columns: 1fr; }
   .outras .imagem { width: 84px; }
 }
+
+/* Notícias da região: municípios da comarca, radar e câmaras de vereadores */
+.nota-local { margin: -6px 0 12px; font-size: 0.82rem; }
+.lista-rolagem { max-height: 520px; overflow-y: auto; }
+.radar .etiqueta { margin-right: 2px; }
+.agenda > h2 + .nota-local { margin-top: 0; }

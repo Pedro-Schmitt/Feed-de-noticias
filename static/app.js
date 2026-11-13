@@ -422,10 +422,17 @@ async function buscarLocal(id) {
   return resp.json();
 }
 
+/** "Ceres e Carmo do Rio Verde"; "Anápolis, Campo Limpo de Goiás e Ouro Verde de Goiás". */
+function juntarNomes(nomes) {
+  return nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : nomes[0] || "";
+}
+
 function painelLocal(nome, cor, dados, outrosLinks = new Set()) {
   const painel = elemento("section", "painel secao");
   painel.style.setProperty("--cor", cor);
   painel.append(elemento("h2", "", nome));
+  // Comarca com mais de um município: diz quais entram nas buscas
+  if (dados?.municipios?.length > 1) painel.append(elemento("p", "nota nota-local", juntarNomes(dados.municipios)));
   if (!dados) {
     painel.append(elemento("p", "vazio", "As notícias deste local ainda estão sendo coletadas. Volte em algumas horas."));
     return painel;
@@ -447,13 +454,110 @@ async function mostrarRegiao(promotoria) {
   const comarca = mapaPromotorias.comarcas[promotoria.comarca];
   nota.textContent = `Comarca de ${promotoria.comarca} e região`;
   container.replaceChildren(elemento("p", "vazio", "Carregando as notícias da sua região…"));
-  const [cidade, regiao] = await Promise.all([comarca.cidade, comarca.regiao].map((id) => buscarLocal(id).catch(() => null)));
+  const ids = [comarca.cidade, comarca.regiao, comarca.camara].filter(Boolean);
+  const [cidade, regiao, camara] = await Promise.all(ids.map((id) => buscarLocal(id).catch(() => null)));
   if (promotoriaAtual !== promotoria) return; // trocou de promotoria enquanto carregava
   const linksCidade = new Set((cidade?.noticias || []).map((n) => n.link));
   container.replaceChildren(
     painelLocal(mapaPromotorias.nomes[comarca.cidade], "#0f9d58", cidade),
     painelLocal(mapaPromotorias.nomes[comarca.regiao], "#c9a227", regiao, linksCidade),
+    painelRadar(cidade, promotoria),
   );
+  if (comarca.camara) container.append(painelCamara(mapaPromotorias.nomes[comarca.camara], camara));
+}
+
+/** Radar: notícias da comarca ligadas às matérias das atribuições da promotoria. */
+function painelRadar(dados, promotoria) {
+  const painel = elemento("section", "painel secao radar");
+  painel.style.setProperty("--cor", "#e8590c");
+  painel.append(elemento("h2", "", "Radar de acontecimentos na comarca"));
+  painel.append(elemento("p", "nota nota-local", promotoria.plena
+    ? "Fatos da comarca que podem exigir a atuação da promotoria."
+    : "Fatos da comarca que podem exigir atuação nas atribuições da sua promotoria."));
+  if (!dados) {
+    painel.append(elemento("p", "vazio", "As notícias da comarca ainda estão sendo coletadas. Volte em algumas horas."));
+    return painel;
+  }
+  const minhas = new Set(promotoria.materias);
+  const achadas = dados.noticias
+    .map((n) => ({ ...n, pertinentes: (n.materias || []).filter((m) => minhas.has(m)) }))
+    .filter((n) => n.pertinentes.length);
+  if (!achadas.length) {
+    painel.append(elemento("p", "vazio", "Nenhum fato ligado às suas atribuições nas notícias dos últimos 10 dias."));
+    return painel;
+  }
+  const ul = elemento("ul", "juridicas lista-rolagem");
+  for (const n of achadas) {
+    const titulo = elemento("h3");
+    n.pertinentes.forEach((m) => titulo.append(elemento("span", "etiqueta", m), " "));
+    titulo.append(n.titulo);
+    const li = elemento("li");
+    li.append(link(n, linhaMeta(n), titulo));
+    ul.append(li);
+  }
+  painel.append(ul);
+  return painel;
+}
+
+const NOTICIAS_CAMARA = 3;
+
+/** Câmaras de vereadores da comarca: principais notícias e, onde publicadas, as sessões. */
+function painelCamara(nome, dados) {
+  const painel = elemento("section", "painel secao agenda camaras");
+  painel.style.setProperty("--cor", "#0b7285");
+  painel.append(elemento("h2", "", nome));
+  if (dados?.municipios?.length > 1) painel.append(elemento("p", "nota nota-local", juntarNomes(dados.municipios)));
+  if (!dados) {
+    painel.append(elemento("p", "vazio", "As notícias das câmaras ainda estão sendo coletadas. Volte em algumas horas."));
+    return painel;
+  }
+
+  const noticiasCamara = elemento("div", "noticias-orgao");
+  noticiasCamara.append(elemento("h3", "titulo-agenda", "Principais notícias"));
+  if (!dados.noticias) {
+    noticiasCamara.append(elemento("p", "vazio", "As notícias das câmaras ainda estão sendo coletadas. Volte em algumas horas."));
+  } else if (!dados.noticias.length) {
+    noticiasCamara.append(elemento("p", "vazio", "Nenhuma notícia nos últimos 10 dias."));
+  } else {
+    const ul = elemento("ul", "juridicas");
+    dados.noticias.slice(0, NOTICIAS_CAMARA).forEach((n) => ul.append(itemJuridico(n)));
+    noticiasCamara.append(ul);
+  }
+  painel.append(noticiasCamara, elemento("h3", "titulo-agenda", "Agenda"));
+
+  const hoje = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+  const agendas = dados.agendas || {};
+  const semAgenda = dados.municipios.filter((m) => !(m in agendas));
+  const corpo = elemento("div", "agenda-corpo");
+  for (const [cidade, agenda] of Object.entries(agendas)) {
+    const titulo = dados.municipios.length > 1 ? `Câmara de ${cidade}` : "";
+    if (!agenda) {
+      corpo.append(bloco(titulo, elemento("p", "vazio", "Não foi possível consultar as sessões agora.")));
+      continue;
+    }
+    const sessoes = agenda.sessoes.length
+      ? listaCompromissos(agenda.sessoes.map((s) => {
+        let extra;
+        if (s.pauta) {
+          extra = elemento("p", "detalhe");
+          extra.append(linkExterno(s.pauta, "Pauta (PDF)"));
+        }
+        return {
+          hora: dataCurta(s.data),
+          titulo: /sess/i.test(s.titulo) ? s.titulo : `Sessão ${s.titulo}`,
+          link: s.link,
+          detalhes: [`${descricaoDia(s.data, hoje)}${s.hora ? ` · ${s.hora.replace(":", "h")}` : ""}${s.finalizada ? " · realizada" : ""}`],
+          extra,
+        };
+      }))
+      : elemento("p", "vazio", "Nenhuma sessão nos últimos dias nem marcada.");
+    corpo.append(bloco(titulo, sessoes, rodapeLink(agenda.link, "Todas as sessões no SAPL da Câmara")));
+  }
+  if (semAgenda.length) {
+    corpo.append(elemento("p", "vazio", `${semAgenda.length > 1 ? "As câmaras de" : "A Câmara de"} ${juntarNomes(semAgenda)} não ${semAgenda.length > 1 ? "publicam" : "publica"} a agenda das sessões em formato aberto.`));
+  }
+  painel.append(corpo);
+  return painel;
 }
 
 /** Cartão da promotoria escolhida: comarca, matérias identificadas e a atribuição original. */

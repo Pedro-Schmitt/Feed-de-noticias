@@ -112,18 +112,20 @@ def api_promotorias():
 
 @app.route("/regional/<id_>.json")
 def api_regional(id_):
-    """Notícias de uma cidade ou região, buscadas na hora (no site publicado, são geradas antes)."""
+    """Notícias de uma comarca, região ou câmaras, buscadas na hora (no site publicado, são geradas antes)."""
     local = mapa_regional()["locais"].get(id_)
     if not local:
         return jsonify({"erro": "local desconhecido"}), 404
     guardado = _cache_locais.get(id_)
     if not guardado or time.time() - guardado[0] > CACHE_LOCAL_SEGUNDOS:
-        guardado = (time.time(), {
+        dados = {
             "nome": local["nome"],
             "tipo": local["tipo"],
             "atualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "noticias": regional.noticias_do_local(local),
-        })
+        }
+        agendas = regional.agendas_das_cidades(local.get("municipios", [])) if local["tipo"] == "camara" else {}
+        guardado = (time.time(), regional.arquivo_do_local(local, dados, agendas))
         _cache_locais[id_] = guardado
     return jsonify(guardado[1])
 
