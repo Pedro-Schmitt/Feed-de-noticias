@@ -32,6 +32,9 @@ IBGE_BRASIL = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios?vi
 # GitHub Actions (fora do Brasil). Municípios e regiões quase nunca mudam; para atualizar,
 # rode "python regional.py --atualizar-ibge" num computador no Brasil
 ARQUIVO_IBGE = Path(__file__).with_name("dados") / "ibge_municipios.json"
+# Cópia da lista de promotorias, usada quando o portal do MPGO está fora do ar (sem ela, o site
+# sairia sem o seletor de promotoria e sem as notícias da região)
+ARQUIVO_PROMOTORIAS = Path(__file__).with_name("dados") / "promotorias.json"
 SITE_PUBLICADO = os.environ.get("SITE_PUBLICADO", "https://revista-do-promotor.web.app")
 SITE_ANTIGO = "https://feed-de-atualizacoes---pedro.web.app"  # hoje redireciona para o novo
 
@@ -77,7 +80,16 @@ def _capitalizar(texto):
 # --- Promotorias, comarcas e regiões ---
 
 def ler_promotorias():
-    """[{nome, comarca, atribuicao}] da lista oficial do MPGO (um cartão por promotoria)."""
+    """[{nome, comarca, atribuicao}] da lista oficial do MPGO; com o portal fora do ar, a cópia do projeto."""
+    try:
+        return _ler_promotorias_do_portal()
+    except Exception as erro:
+        print(f"[regional] Portal do MPGO indisponível ({erro}); usando a cópia em {ARQUIVO_PROMOTORIAS.name}")
+        return json.loads(ARQUIVO_PROMOTORIAS.read_text(encoding="utf-8"))
+
+
+def _ler_promotorias_do_portal():
+    """Lê a lista oficial do MPGO (um cartão por promotoria)."""
     pagina = _get(LISTA_PROMOTORIAS).content.decode("utf-8")
     promotorias = []
     for bloco in re.split(r'<div class="comarca">', pagina)[1:]:
