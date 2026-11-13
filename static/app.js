@@ -422,6 +422,15 @@ async function buscarLocal(id) {
   return resp.json();
 }
 
+function chaveTitulo(noticia) {
+  return "titulo:" + semAcento(noticia.titulo).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Links e títulos de uma lista de notícias, para não repeti-las em outro quadro. */
+function chavesNoticias(lista) {
+  return new Set(lista.flatMap((n) => [n.link, chaveTitulo(n)]));
+}
+
 /** "Ceres e Carmo do Rio Verde"; "Anápolis, Campo Limpo de Goiás e Ouro Verde de Goiás". */
 function juntarNomes(nomes) {
   return nomes.length > 1 ? `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}` : nomes[0] || "";
@@ -437,8 +446,8 @@ function painelLocal(nome, cor, dados, outrosLinks = new Set()) {
     painel.append(elemento("p", "vazio", "As notícias deste local ainda estão sendo coletadas. Volte em algumas horas."));
     return painel;
   }
-  // A região não repete o que já está no quadro da cidade; a busca não traz fotos
-  const lista = dados.noticias.filter((n) => !outrosLinks.has(n.link));
+  // Sem repetir o que já está em outro quadro; a busca não traz fotos
+  const lista = dados.noticias.filter((n) => !outrosLinks.has(n.link) && !outrosLinks.has(chaveTitulo(n)));
   painel.append(...destaqueELista(lista, "Nenhuma notícia nos últimos 10 dias.", false));
   return painel;
 }
@@ -457,14 +466,19 @@ async function mostrarRegiao(promotoria) {
   const ids = [comarca.cidade, comarca.regiao, comarca.camara].filter(Boolean);
   const [cidade, regiao, camara] = await Promise.all(ids.map((id) => buscarLocal(id).catch(() => null)));
   if (promotoriaAtual !== promotoria) return; // trocou de promotoria enquanto carregava
-  const linksCidade = new Set((cidade?.noticias || []).map((n) => n.link));
+  // O que já aparece no quadro das câmaras não se repete na comarca nem na região, e o que
+  // aparece na comarca não se repete na região (pelo link ou pelo título)
+  const daCamara = chavesNoticias((camara?.noticias || []).slice(0, NOTICIAS_CAMARA));
+  const daCidade = chavesNoticias(cidade?.noticias || []);
   container.replaceChildren(
-    painelLocal(mapaPromotorias.nomes[comarca.cidade], "#0f9d58", cidade),
-    painelLocal(mapaPromotorias.nomes[comarca.regiao], "#c9a227", regiao, linksCidade),
+    painelLocal(mapaPromotorias.nomes[comarca.cidade], "#0f9d58", cidade, daCamara),
+    painelLocal(mapaPromotorias.nomes[comarca.regiao], "#c9a227", regiao, new Set([...daCamara, ...daCidade])),
     painelRadar(cidade, promotoria),
   );
   if (comarca.camara) container.append(painelCamara(mapaPromotorias.nomes[comarca.camara], camara));
 }
+
+const NOTICIAS_CAMARA = 3;
 
 /** Radar: notícias da comarca ligadas às matérias das atribuições da promotoria. */
 function painelRadar(dados, promotoria) {
@@ -486,20 +500,48 @@ function painelRadar(dados, promotoria) {
     painel.append(elemento("p", "vazio", "Nenhum fato ligado às suas atribuições nas notícias dos últimos 10 dias."));
     return painel;
   }
-  const ul = elemento("ul", "juridicas lista-rolagem");
+  const ul = elemento("ul", "radar-lista lista-rolagem");
   for (const n of achadas) {
-    const titulo = elemento("h3");
-    n.pertinentes.forEach((m) => titulo.append(elemento("span", "etiqueta", m), " "));
-    titulo.append(n.titulo);
-    const li = elemento("li");
-    li.append(link(n, linhaMeta(n), titulo));
+    const etiquetas = elemento("p", "radar-etiquetas");
+    n.pertinentes.forEach((m) => etiquetas.append(elemento("span", "etiqueta", m), " "));
+    // Com a análise do Claude: o fato resumido e o motivo; sem ela, o motivo geral da matéria
+    const fato = elemento("h3", "", n.radar?.resumo || n.titulo);
+    const motivo = elemento("p", "radar-motivo");
+    motivo.append(elemento("strong", "", "Por que pode exigir atuação: "),
+      n.radar?.motivo || n.pertinentes.map((m) => MOTIVOS_MATERIA[m]).filter(Boolean).join(" "));
+    const fonte = elemento("p", "radar-fonte");
+    fonte.append(link(n, `Ler a notícia em ${n.fonte}`), ` · ${tempoRelativo(n.data)}`);
+    const li = elemento("li", "radar-item");
+    li.append(etiquetas, fato, motivo, fonte);
     ul.append(li);
   }
   painel.append(ul);
   return painel;
 }
 
-const NOTICIAS_CAMARA = 3;
+// Motivo geral de cada matéria, para quando a notícia ainda não foi analisada pelo Claude
+const MOTIVOS_MATERIA = {
+  "Criminal": "Possível crime de ação penal pública: acompanhar a investigação e avaliar a denúncia.",
+  "Tribunal do Júri": "Possível crime doloso contra a vida, de competência do Tribunal do Júri.",
+  "Execução penal": "Diz respeito a presos ou ao sistema prisional, sujeitos à fiscalização do MP.",
+  "Violência doméstica": "Possível violência contra a mulher: medidas protetivas e persecução penal.",
+  "Infância e juventude": "Envolve criança ou adolescente, cuja proteção cabe ao MP.",
+  "Família e sucessões": "Questão de família com possível interesse de incapaz.",
+  "Patrimônio público": "Possível irregularidade com recursos ou bens públicos, a apurar em procedimento próprio.",
+  "Tutela coletiva": "Interesse coletivo que pode ser tutelado por inquérito civil ou ação civil pública.",
+  "Meio ambiente e urbanismo": "Possível dano ambiental ou urbanístico, a apurar e reparar.",
+  "Consumidor": "Possível lesão a consumidores, objeto de tutela coletiva.",
+  "Saúde": "Pode envolver falha na prestação do serviço público de saúde.",
+  "Educação": "Pode envolver falha na prestação do serviço público de educação.",
+  "Idoso e pessoa com deficiência": "Envolve idoso ou pessoa com deficiência, sob proteção do MP.",
+  "Eleitoral": "Pode envolver irregularidade eleitoral.",
+  "Registros públicos": "Diz respeito a registros públicos, fiscalizados pelo MP.",
+  "Fundações": "Diz respeito a fundação, sujeita à fiscalização do MP.",
+  "Controle externo da atividade policial": "Envolve a conduta de policiais, sujeita ao controle externo do MP.",
+  "Ordem tributária": "Possível crime contra a ordem tributária.",
+  "Cidadania": "Pode envolver violação de direitos do cidadão ou falha de serviço público essencial.",
+};
+
 
 /** Câmaras de vereadores da comarca: principais notícias e, onde publicadas, as sessões. */
 function painelCamara(nome, dados) {

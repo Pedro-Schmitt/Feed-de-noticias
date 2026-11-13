@@ -22,6 +22,7 @@ import requests
 
 import coletor
 import informativos
+import radar
 
 TIMEOUT = 30
 LISTA_PROMOTORIAS = ("https://www.mpgo.mp.br/portal/arquivos/2024/09/25/14_38_13_51_Lista_das_Promotorias_de_"
@@ -349,6 +350,8 @@ def atualizar_estado(mapa, estado, orcamento=BUSCAS_POR_EXECUCAO):
         except Exception as erro:  # Google recusou: para por aqui e tenta na próxima execução
             print(f"[regional] Falha em {local['nome']}: {erro}")
             break
+        if local["tipo"] == "cidade":
+            analisar_radar(local, noticias, estado.get(id_, {}).get("noticias", []))
         estado[id_] = {
             "nome": local["nome"],
             "tipo": local["tipo"],
@@ -358,6 +361,34 @@ def atualizar_estado(mapa, estado, orcamento=BUSCAS_POR_EXECUCAO):
         }
         gastas += len(local["buscas"])
     return gastas
+
+
+def analisar_radar(local, noticias, antigas):
+    """Guarda em cada notícia da comarca a análise do Claude para o radar (resumo do fato e motivo
+    da atuação). A análise feita numa execução anterior é reaproveitada; só as novas vão ao Claude."""
+    feitas = {n["link"]: n["radar"] for n in antigas if "radar" in n}
+    for noticia in noticias:
+        if noticia["link"] in feitas:
+            noticia["radar"] = feitas[noticia["link"]]
+    if not radar.ativo():
+        return
+    novas = [n for n in noticias if "radar" not in n and materias_da_noticia(n)]
+    try:
+        analises = radar.analisar(novas, local["municipios"])
+    except Exception as erro:  # sem a análise, o radar usa só as palavras-chave
+        print(f"[regional] Radar de {local['nome']} sem análise: {type(erro).__name__}: {erro}")
+        return
+    for noticia in novas:
+        if noticia["link"] in analises:
+            noticia["radar"] = analises[noticia["link"]]
+
+
+def _materias_radar(noticia):
+    """As matérias da análise do Claude; sem análise, as das palavras-chave."""
+    analise = noticia.get("radar")
+    if analise:
+        return [] if analise.get("descartada") else analise["materias"]
+    return materias_da_noticia(noticia)
 
 
 def estado_publicado():
@@ -385,7 +416,7 @@ def arquivo_do_local(local, dados, agendas):
     """O que a página recebe de um local: as notícias guardadas mais o radar e as agendas."""
     if local["tipo"] == "cidade" and dados:
         # O radar da página filtra estas notícias pelas matérias da promotoria escolhida
-        dados = {**dados, "noticias": [{**n, "materias": materias_da_noticia(n)} for n in dados["noticias"]]}
+        dados = {**dados, "noticias": [{**n, "materias": _materias_radar(n)} for n in dados["noticias"]]}
     if local["tipo"] == "camara":
         dados = {"nome": local["nome"], "tipo": "camara", "municipios": local["municipios"],
                  **(dados or {"noticias": None}),

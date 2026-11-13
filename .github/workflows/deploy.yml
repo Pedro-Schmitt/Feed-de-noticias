@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: America/Sao_Paulo  # datas e horas do intradiário no horário de Brasília
+      # Resumos do radar de acontecimentos (radar.py); sem o secret, o radar usa só palavras-chave
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
