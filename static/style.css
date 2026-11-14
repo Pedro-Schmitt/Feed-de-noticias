@@ -777,3 +777,60 @@ footer { padding-bottom: 24px; }
 .radar-fonte { margin: 0; font-size: 0.78rem; color: var(--suave); }
 .radar-fonte a { color: var(--suave); text-decoration: underline; }
 .radar-lista { list-style: none; margin: 0; padding: 0; }
+
+/* --- Mais de uma promotoria --- */
+.outras-promotorias { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--borda); }
+.outras-titulo { margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--suave); }
+.outras-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.outra-promotoria {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px; border: 1px solid var(--borda); border-radius: 10px; max-width: 760px;
+}
+.outra-nome { margin: 0; font-weight: 600; }
+.botao-outra, .botao-remover {
+  font: inherit; font-size: 0.85rem; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--borda); background: var(--painel); color: var(--texto);
+}
+.botao-outra { align-self: flex-start; border-style: dashed; color: var(--destaque); font-weight: 600; }
+.botao-outra:hover, .botao-remover:hover { border-color: var(--suave); }
+.botao-remover { flex: none; font-size: 0.8rem; padding: 4px 12px; }
+.seletor-outra { display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
+.seletor-outra[hidden] { display: none; }
+.seletor-outra input {
+  font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--borda);
+  background: var(--painel); color: var(--texto);
+}
+.seletor-outra input:focus { outline: 2px solid var(--cor-area); outline-offset: 1px; }
+
+/* Várias comarcas: um título antes dos quadros de cada uma */
+.titulo-comarca { grid-column: 1 / -1; margin: 18px 0 -4px; font-size: 1.2rem; font-weight: 800; }
+.titulo-comarca:first-child { margin-top: 0; }
+
+/* --- Instituições que merecem acompanhamento --- */
+.instituicoes { grid-column: 1 / -1; }
+.instituicoes-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-items: start; }
+.instituicoes-grupo { border: 1px solid var(--borda); border-radius: 12px; padding: 0 14px; }
+.instituicoes-grupo summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 0; cursor: pointer; font-weight: 600; list-style: none;
+}
+.instituicoes-grupo summary::-webkit-details-marker { display: none; }
+.instituicoes-grupo summary::before { content: "▸"; color: var(--cor); flex: none; transition: transform 0.15s; }
+.instituicoes-grupo[open] summary::before { transform: rotate(90deg); }
+.instituicoes-nome { flex: 1; }
+.instituicoes-conta {
+  flex: none; min-width: 28px; padding: 2px 8px; border-radius: 999px; text-align: center; font-size: 0.8rem;
+  background: color-mix(in srgb, var(--cor) 12%, transparent); color: var(--cor);
+}
+.instituicoes-grupo > .radar-etiquetas { margin: -4px 0 8px; }
+.instituicoes-lista { list-style: none; margin: 0 0 12px; padding: 0; max-height: 360px; }
+.instituicoes-lista li { display: flex; flex-direction: column; padding: 7px 0; border-top: 1px solid var(--borda); }
+.instituicoes-lista a { font-size: 0.9rem; font-weight: 500; color: var(--texto); }
+.instituicoes-lista a:hover { color: var(--cor); text-decoration: underline; }
+.instituicoes-detalhe { font-size: 0.78rem; color: var(--suave); }
+.instituicoes-fontes { margin: 12px 0 0; font-size: 0.78rem; }
+.informativo-comentado { margin-top: 2px; }
+@media (max-width: 760px) {
+  .instituicoes-grade { grid-template-columns: 1fr; }
+  .outra-promotoria { flex-direction: column; align-items: flex-start; }
+}

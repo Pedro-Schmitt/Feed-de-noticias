@@ -314,15 +314,9 @@ const NOMES_MARCAS = {
   mudanca: "🔄 Mudança de entendimento",
 };
 
-/** Link do julgado: o PDF completo já na página dele (ou o post, se não houver PDF). */
-function linkJulgado(info, julgado, ...conteudo) {
-  const href = info.pdf ? `${info.pdf}${julgado.pagina ? `#page=${julgado.pagina}` : ""}` : info.link;
-  return link({ link: href }, ...conteudo);
-}
-
-/** Só a data: o horário que o feed traz é sempre 00:30, então não diz nada. */
+/** Só a data, no formato "hoje", "ontem" ou "em 10/11/2026". */
 function dataPublicacao(iso) {
-  const dia = (d) => d.toLocaleDateString("pt-BR");
+  const dia = (d) => d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
   const data = new Date(iso);
   const ontem = new Date(Date.now() - 86400000);
   if (dia(data) === dia(new Date())) return "hoje";
@@ -330,40 +324,50 @@ function dataPublicacao(iso) {
   return `em ${dia(data)}`;
 }
 
-function blocoInformativo(info) {
+/** Um informativo: a fonte primária é o site do tribunal; a versão comentada do Dizer o
+ * Direito, que sai semanas depois, vem logo abaixo quando já publicada. */
+function blocoInformativo(info, tribunal) {
   const bloco = elemento("div", "informativo-bloco");
   const titulo = elemento("p", "informativo-titulo");
   if (info.novo) titulo.append(elemento("span", "etiqueta andamento", "Novo"));
-  titulo.append(`Informativo ${info.numero} · publicado ${dataPublicacao(info.data)}`);
-  const daPromotoria = Boolean(promotoriaAtual) && filtroJurisprudencia === "promotoria";
+  titulo.append(`Informativo ${info.numero}${info.data ? ` · divulgado ${dataPublicacao(info.data)}` : ""}`);
+  const perfil = perfilPromotorias();
+  const daPromotoria = Boolean(perfil) && filtroJurisprudencia === "promotoria";
   const julgados = daPromotoria ? info.julgados_mp.filter(pertinente) : info.julgados_mp;
-  const alvo = daPromotoria ? "pertinentes às matérias da sua promotoria" : "de interesse do MP estadual";
+  const minhas = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
+  const alvo = daPromotoria ? `pertinentes às matérias ${minhas}` : "de interesse do MP estadual";
   const resumo = julgados.length
     ? `${julgados.length} de ${info.total} julgados ${alvo}`
     : daPromotoria
-      ? `Nenhum dos ${info.total} julgados é pertinente às matérias da sua promotoria`
+      ? `Nenhum dos ${info.total} julgados é pertinente às matérias ${minhas}`
       : `Nenhum dos ${info.total} julgados tem relação direta com a atuação do MP estadual`;
   const ler = elemento("p", "informativo-resumo", `${resumo} · `);
-  ler.append(link(info, "Ler no Dizer o Direito"));
-  if (info.pdf) ler.append(" · ", link({ link: info.pdf }, "PDF completo"));
-  bloco.append(titulo, ler);
+  ler.append(link(info, `Ler no site do ${tribunal}`));
+  if (info.pdf) ler.append(" · ", link({ link: info.pdf }, "PDF"));
+  const comentado = elemento("p", "informativo-resumo informativo-comentado");
+  if (info.comentado) {
+    comentado.append("Versão comentada: ", link({ link: info.comentado.link }, "Dizer o Direito"));
+    if (info.comentado.pdf) comentado.append(" · ", link({ link: info.comentado.pdf }, "PDF comentado"));
+  } else {
+    comentado.append("Versão comentada do Dizer o Direito: ainda não publicada (costuma sair semanas depois do tribunal).");
+  }
+  bloco.append(titulo, ler, comentado);
 
   if (julgados.length) {
     const lista = elemento("ul", "julgados");
     for (const j of julgados) {
       const item = elemento("li", j.marcas.includes("importante") ? "destacado" : "");
-      const tese = linkJulgado(info, j, j.tese);
+      const tese = link({ link: j.link || info.link }, j.tese);
       tese.className = "julgado-tese";
-      tese.title = j.pagina ? `Abrir o PDF completo na página ${j.pagina}` : "Abrir o PDF completo";
+      tese.title = `Abrir o julgado no site do ${tribunal}`;
       item.append(elemento("p", "julgado-tema", [j.ramo, j.assunto].filter(Boolean).join(" · ")), tese);
       const etiquetas = elemento("div", "julgado-etiquetas");
       for (const motivo of j.interesse_mp) {
-        // As matérias que batem com as da promotoria ficam destacadas
-        const casa = promotoriaAtual && (motivo === "Cita o Ministério Público" || promotoriaAtual.materias.includes(motivo));
-        etiquetas.append(elemento("span", casa && !promotoriaAtual.plena ? "etiqueta andamento" : "etiqueta", motivo));
+        // As matérias que batem com as das promotorias escolhidas ficam destacadas
+        const casa = perfil && (motivo === "Cita o Ministério Público" || perfil.materias.includes(motivo));
+        etiquetas.append(elemento("span", casa && !perfil.plena ? "etiqueta andamento" : "etiqueta", motivo));
       }
       for (const marca of j.marcas) etiquetas.append(elemento("span", "marca", NOMES_MARCAS[marca]));
-      if (j.pagina) etiquetas.append(linkJulgado(info, j, `Ver no PDF (p. ${j.pagina})`));
       item.append(etiquetas);
       lista.append(item);
     }
@@ -375,9 +379,10 @@ function blocoInformativo(info) {
 function montarInformativos() {
   const container = document.getElementById("informativos");
   container.replaceChildren();
-  // O filtro só aparece com uma promotoria escolhida que não seja de atuação plena
+  // O filtro só aparece com promotoria escolhida que não seja de atuação plena
+  const perfil = perfilPromotorias();
   const filtro = document.getElementById("filtro-jurisprudencia");
-  filtro.hidden = !promotoriaAtual || promotoriaAtual.plena;
+  filtro.hidden = !perfil || perfil.plena;
   filtro.querySelectorAll("button").forEach((b) => b.classList.toggle("ativo", b.dataset.filtro === filtroJurisprudencia));
   for (const [id, nome] of [["stf", "STF"], ["stj", "STJ"]]) {
     const lista = noticias.informativos?.[id];
@@ -385,11 +390,11 @@ function montarInformativos() {
     painel.style.setProperty("--cor", CORES_SECOES[id]);
     painel.append(elemento("h2", "", `Informativos do ${nome}`));
     if (!lista?.length) {
-      painel.append(elemento("p", "vazio", "Não foi possível consultar o Dizer o Direito agora."));
+      painel.append(elemento("p", "vazio", `Não foi possível consultar o site do ${nome} agora.`));
     } else {
       // Os informativos rolam dentro do quadro, para a página não ficar comprida
       const corpo = elemento("div", "informativo-corpo");
-      lista.forEach((info) => corpo.append(blocoInformativo(info)));
+      lista.forEach((info) => corpo.append(blocoInformativo(info, nome)));
       painel.append(corpo);
     }
     container.append(painel);
@@ -400,20 +405,38 @@ function montarInformativos() {
 
 const CHAVE_PROMOTORIA = "promotoria-escolhida";
 let mapaPromotorias = null;
-let promotoriaAtual = null;
+// A promotoria principal e as outras pelas quais o promotor também responde (acumulação, substituição)
+let promotoriasAtuais = [];
 let filtroJurisprudencia = "promotoria";
+let geracaoRegiao = 0; // para descartar uma carga de notícias que ficou velha com outra escolha
+
+/** As matérias das promotorias somadas (null sem nenhuma escolhida). Uma de atuação plena vale por todas. */
+function perfilPromotorias(lista = promotoriasAtuais) {
+  if (!lista.length) return null;
+  const plena = lista.find((p) => p.plena);
+  return plena ? { materias: plena.materias, plena: true } : { materias: [...new Set(lista.flatMap((p) => p.materias))], plena: false };
+}
 
 /** Texto em minúsculas e sem acentos, para comparar o que foi digitado com a lista. */
 function semAcento(texto) {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-function nomeSalvo() {
+/** A escolha salva numa visita anterior: {nome, outras: [nomes]}. */
+function escolhaSalva() {
   try {
-    return JSON.parse(localStorage.getItem(CHAVE_PROMOTORIA))?.nome || null;
+    const salva = JSON.parse(localStorage.getItem(CHAVE_PROMOTORIA));
+    return salva?.nome ? { nome: salva.nome, outras: salva.outras || [] } : null;
   } catch {
     return null;
   }
+}
+
+function salvarEscolha() {
+  try {
+    const [principal, ...outras] = promotoriasAtuais;
+    localStorage.setItem(CHAVE_PROMOTORIA, JSON.stringify({ nome: principal.nome, outras: outras.map((p) => p.nome) }));
+  } catch { /* sem localStorage: vale só nesta visita */ }
 }
 
 async function buscarLocal(id) {
@@ -442,7 +465,7 @@ function painelLocal(nome, cor, dados, outrosLinks = new Set()) {
   painel.append(elemento("h2", "", nome));
   // Comarca com mais de um município: diz quais entram nas buscas
   if (dados?.municipios?.length > 1) painel.append(elemento("p", "nota nota-local", juntarNomes(dados.municipios)));
-  if (!dados) {
+  if (!dados?.noticias) {
     painel.append(elemento("p", "vazio", "As notícias deste local ainda estão sendo coletadas. Volte em algumas horas."));
     return painel;
   }
@@ -452,30 +475,48 @@ function painelLocal(nome, cor, dados, outrosLinks = new Set()) {
   return painel;
 }
 
-async function mostrarRegiao(promotoria) {
+/** Notícias, radar, câmaras e instituições de cada comarca das promotorias escolhidas. */
+async function mostrarRegioes() {
   const container = document.getElementById("regional");
   const nota = document.getElementById("nota-regiao");
-  if (!promotoria) {
+  const geracao = ++geracaoRegiao;
+  if (!promotoriasAtuais.length) {
     nota.textContent = "Escolha a sua Promotoria de Justiça no início da página para ver as notícias da sua cidade e da sua região.";
     container.replaceChildren();
     return;
   }
-  const comarca = mapaPromotorias.comarcas[promotoria.comarca];
-  nota.textContent = `Comarca de ${promotoria.comarca} e região`;
+  // Cada comarca uma vez só, na ordem em que as promotorias foram escolhidas
+  const comarcas = [...new Set(promotoriasAtuais.map((p) => p.comarca))].filter((c) => mapaPromotorias.comarcas[c]);
+  nota.textContent = comarcas.length > 1 ? `Comarcas de ${juntarNomes(comarcas)} e suas regiões` : `Comarca de ${comarcas[0]} e região`;
   container.replaceChildren(elemento("p", "vazio", "Carregando as notícias da sua região…"));
-  const ids = [comarca.cidade, comarca.regiao, comarca.camara].filter(Boolean);
-  const [cidade, regiao, camara] = await Promise.all(ids.map((id) => buscarLocal(id).catch(() => null)));
-  if (promotoriaAtual !== promotoria) return; // trocou de promotoria enquanto carregava
-  // O que já aparece no quadro das câmaras não se repete na comarca nem na região, e o que
-  // aparece na comarca não se repete na região (pelo link ou pelo título)
-  const daCamara = chavesNoticias((camara?.noticias || []).slice(0, NOTICIAS_CAMARA));
-  const daCidade = chavesNoticias(cidade?.noticias || []);
-  container.replaceChildren(
-    painelLocal(mapaPromotorias.nomes[comarca.cidade], "#0f9d58", cidade, daCamara),
-    painelLocal(mapaPromotorias.nomes[comarca.regiao], "#c9a227", regiao, new Set([...daCamara, ...daCidade])),
-    painelRadar(cidade, promotoria),
-  );
-  if (comarca.camara) container.append(painelCamara(mapaPromotorias.nomes[comarca.camara], camara));
+  const grupos = await Promise.all(comarcas.map(async (nome) => {
+    const comarca = mapaPromotorias.comarcas[nome];
+    const [cidade, regiao, camara] = await Promise.all(
+      [comarca.cidade, comarca.regiao, comarca.camara].map((id) => (id ? buscarLocal(id).catch(() => null) : null)));
+    return { nome, comarca, cidade, regiao, camara };
+  }));
+  if (geracao !== geracaoRegiao) return; // a escolha mudou enquanto carregava
+
+  container.replaceChildren();
+  const regioesMostradas = new Set();
+  for (const { nome, comarca, cidade, regiao, camara } of grupos) {
+    // O radar e as instituições seguem as matérias das promotorias escolhidas nesta comarca
+    const perfil = perfilPromotorias(promotoriasAtuais.filter((p) => p.comarca === nome));
+    if (grupos.length > 1) container.append(elemento("h3", "titulo-comarca", `Comarca de ${nome}`));
+    // O que já aparece no quadro das câmaras não se repete na comarca nem na região, e o que
+    // aparece na comarca não se repete na região (pelo link ou pelo título)
+    const daCamara = chavesNoticias((camara?.noticias || []).slice(0, NOTICIAS_CAMARA));
+    const daCidade = chavesNoticias(cidade?.noticias || []);
+    container.append(painelLocal(mapaPromotorias.nomes[comarca.cidade], "#0f9d58", cidade, daCamara));
+    // Duas comarcas da mesma região imediata: a região aparece uma vez
+    if (!regioesMostradas.has(comarca.regiao)) {
+      regioesMostradas.add(comarca.regiao);
+      container.append(painelLocal(mapaPromotorias.nomes[comarca.regiao], "#c9a227", regiao, new Set([...daCamara, ...daCidade])));
+    }
+    container.append(painelRadar(cidade, perfil));
+    if (comarca.camara) container.append(painelCamara(mapaPromotorias.nomes[comarca.camara], camara));
+    container.append(painelInstituicoes(cidade, perfil));
+  }
 }
 
 const NOTICIAS_CAMARA = 3;
@@ -488,7 +529,7 @@ function painelRadar(dados, promotoria) {
   painel.append(elemento("p", "nota nota-local", promotoria.plena
     ? "Fatos da comarca que podem exigir a atuação da promotoria."
     : "Fatos da comarca que podem exigir atuação nas atribuições da sua promotoria."));
-  if (!dados) {
+  if (!dados?.noticias) {
     painel.append(elemento("p", "vazio", "As notícias da comarca ainda estão sendo coletadas. Volte em algumas horas."));
     return painel;
   }
@@ -542,6 +583,61 @@ const MOTIVOS_MATERIA = {
   "Cidadania": "Pode envolver violação de direitos do cidadão ou falha de serviço público essencial.",
 };
 
+
+/** Instituições das cidades da comarca ligadas às matérias das promotorias: escolas, hospitais,
+ * UBS, CAPS, unidades prisionais e unidades de acolhimento (bases oficiais, em dados/instituicoes.json). */
+function painelInstituicoes(dados, perfil) {
+  const painel = elemento("section", "painel secao instituicoes");
+  painel.style.setProperty("--cor", "#5f3dc4");
+  painel.append(elemento("h2", "", "Instituições que merecem seu acompanhamento"));
+  const inst = dados?.instituicoes;
+  if (!inst) {
+    painel.append(elemento("p", "vazio", "A lista de instituições da comarca ainda não está disponível."));
+    return painel;
+  }
+  const cidades = Object.keys(inst.municipios);
+  const minhas = new Set(perfil.materias);
+  const tipos = inst.tipos.filter((t) => perfil.plena || t.materias.some((m) => minhas.has(m)));
+  const dono = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
+  painel.append(elemento("p", "nota nota-local",
+    `${cidades.length > 1 ? `Em ${juntarNomes(cidades)}, ligadas` : "Ligadas"} às matérias ${dono}. Clique num tipo para ver a lista.`));
+  if (!tipos.length) {
+    painel.append(elemento("p", "vazio", "Nenhum tipo de instituição da lista está ligado às suas matérias."));
+    return painel;
+  }
+  const grade = elemento("div", "instituicoes-grade");
+  for (const tipo of tipos) {
+    const itens = cidades.flatMap((c) => (inst.municipios[c][tipo.id] || []).map((i) => ({ ...i, municipio: c })));
+    const grupo = elemento("details", "instituicoes-grupo");
+    const resumo = elemento("summary");
+    resumo.append(elemento("span", "instituicoes-nome", tipo.nome), elemento("span", "instituicoes-conta", String(itens.length)));
+    grupo.append(resumo);
+    const materias = elemento("p", "radar-etiquetas");
+    tipo.materias.forEach((m) => materias.append(elemento("span", "etiqueta", m), " "));
+    grupo.append(materias);
+    if (!itens.length) {
+      grupo.append(elemento("p", "vazio", "Nenhuma registrada nas bases oficiais."));
+    } else {
+      const ul = elemento("ul", "instituicoes-lista lista-rolagem");
+      for (const i of itens) {
+        const li = elemento("li");
+        const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${i.nome}, ${i.municipio} - GO`)}`;
+        const nome = linkExterno(mapa, i.nome);
+        nome.title = "Ver no mapa";
+        const detalhe = [i.detalhe, cidades.length > 1 ? i.municipio : ""].filter(Boolean).join(" · ");
+        li.append(nome);
+        if (detalhe) li.append(elemento("span", "instituicoes-detalhe", detalhe));
+        ul.append(li);
+      }
+      grupo.append(ul);
+    }
+    grade.append(grupo);
+  }
+  painel.append(grade);
+  const fontes = Object.values(inst.fontes || {});
+  if (fontes.length) painel.append(elemento("p", "nota instituicoes-fontes", `Fontes: ${fontes.join("; ")}.`));
+  return painel;
+}
 
 /** Câmaras de vereadores da comarca: principais notícias e, onde publicadas, as sessões. */
 function painelCamara(nome, dados) {
@@ -602,12 +698,16 @@ function painelCamara(nome, dados) {
   return painel;
 }
 
-/** Cartão da promotoria escolhida: comarca, matérias identificadas e a atribuição original. */
-function mostrarPromotoria(promotoria) {
+/** Cartão da promotoria principal (comarca, matérias e atribuição), as outras pelas quais o
+ * promotor também responde e o botão para acrescentar mais uma. */
+function mostrarPromotorias() {
+  const [promotoria, ...outras] = promotoriasAtuais;
   const cartao = document.getElementById("promotoria-escolhida");
   document.getElementById("seletor-promotoria").hidden = true;
   document.getElementById("trocar-promotoria").hidden = false;
-  document.getElementById("nota-promotoria").textContent = "As notícias da sua região e os informativos abaixo seguem esta escolha.";
+  document.getElementById("nota-promotoria").textContent = outras.length
+    ? "As notícias das suas regiões e os informativos abaixo somam todas as promotorias escolhidas."
+    : "As notícias da sua região e os informativos abaixo seguem esta escolha.";
 
   const titulo = elemento("p", "promotoria-nome", promotoria.nome);
   const comarca = elemento("p", "nota", `Comarca de ${promotoria.comarca}`);
@@ -619,16 +719,72 @@ function mostrarPromotoria(promotoria) {
   }
   const atribuicao = elemento("details", "atribuicao");
   atribuicao.append(elemento("summary", "", "Atribuição (lista oficial do MPGO)"), elemento("p", "", promotoria.atribuicao || "Não informada."));
-  const aviso = elemento("p", "nota", "As matérias são identificadas automaticamente pelo texto da atribuição; ressalvas como \"exceto\" ou \"exclusivamente\" não são consideradas.");
+  const aviso = elemento("p", "nota", 'As matérias são identificadas automaticamente pelo texto da atribuição; ressalvas como "exceto" ou "exclusivamente" não são consideradas.');
+
+  const extras = elemento("div", "outras-promotorias");
+  if (outras.length) {
+    extras.append(elemento("p", "outras-titulo", "Também responde por:"));
+    const lista = elemento("ul", "outras-lista");
+    for (const p of outras) {
+      const item = elemento("li", "outra-promotoria");
+      const texto = elemento("div");
+      texto.append(elemento("p", "outra-nome", p.nome),
+        elemento("p", "nota", `Comarca de ${p.comarca} · ${p.plena ? "atuação plena" : p.materias.join(", ")}`));
+      const remover = elemento("button", "botao-remover", "Remover");
+      remover.type = "button";
+      remover.title = `Deixar de acompanhar a ${p.nome}`;
+      remover.addEventListener("click", () => {
+        promotoriasAtuais = promotoriasAtuais.filter((q) => q !== p);
+        salvarEscolha();
+        aplicarPromotorias();
+      });
+      item.append(texto, remover);
+      lista.append(item);
+    }
+    extras.append(lista);
+  }
+  const botao = elemento("button", "botao-outra", "Respondendo por mais de uma promotoria? Selecione outro órgão:");
+  botao.type = "button";
+  const seletor = elemento("div", "seletor-outra");
+  seletor.hidden = true;
+  const campo = elemento("input");
+  campo.type = "search";
+  campo.autocomplete = "off";
+  campo.setAttribute("list", "lista-promotorias");
+  campo.setAttribute("aria-label", "Outra Promotoria de Justiça");
+  campo.placeholder = "Digite a cidade ou o nome da promotoria";
+  const avisoOutra = elemento("p", "nota");
+  seletor.append(campo, avisoOutra);
+  botao.addEventListener("click", () => {
+    seletor.hidden = !seletor.hidden;
+    if (!seletor.hidden) campo.focus();
+  });
+  const adicionar = () => {
+    const { escolhida, aviso: problema } = acharPromotoria(campo.value);
+    if (!escolhida) {
+      avisoOutra.textContent = problema;
+      return;
+    }
+    if (promotoriasAtuais.includes(escolhida)) {
+      avisoOutra.textContent = "Esta promotoria já está escolhida.";
+      return;
+    }
+    promotoriasAtuais = [...promotoriasAtuais, escolhida];
+    salvarEscolha();
+    aplicarPromotorias();
+  };
+  campo.addEventListener("change", adicionar);
+  campo.addEventListener("keydown", (e) => { if (e.key === "Enter") adicionar(); });
+  extras.append(botao, seletor);
+
   cartao.style.setProperty("--cor", "#6b7f99");
-  cartao.replaceChildren(titulo, comarca, materias, atribuicao, aviso);
+  cartao.replaceChildren(titulo, comarca, materias, atribuicao, aviso, extras);
   cartao.hidden = false;
 }
 
-function aplicarPromotoria(promotoria) {
-  promotoriaAtual = promotoria;
-  if (promotoria) mostrarPromotoria(promotoria);
-  mostrarRegiao(promotoria);
+function aplicarPromotorias() {
+  if (promotoriasAtuais.length) mostrarPromotorias();
+  mostrarRegioes();
   if (noticias) montarInformativos();
 }
 
@@ -639,29 +795,34 @@ function pedirPromotoria() {
   document.getElementById("nota-promotoria").textContent =
     "Escolha a sua Promotoria de Justiça para ver as notícias da sua região e os informativos ligados às suas atribuições. A escolha fica salva neste navegador.";
   document.getElementById("campo-promotoria").value = "";
-  aplicarPromotoria(null);
+  promotoriasAtuais = [];
+  aplicarPromotorias();
+}
+
+/** A promotoria pelo que foi digitado: o nome exato da lista ou, se só uma combinar, ela. */
+function acharPromotoria(valor) {
+  const texto = semAcento(valor.trim());
+  if (!texto) return { escolhida: null, aviso: "" };
+  const exata = mapaPromotorias.promotorias.find((p) => semAcento(p.nome) === texto);
+  const parecidas = mapaPromotorias.promotorias.filter((p) => semAcento(`${p.nome} ${p.comarca}`).includes(texto));
+  const escolhida = exata || (parecidas.length === 1 ? parecidas[0] : null);
+  if (escolhida && !mapaPromotorias.comarcas[escolhida.comarca]) {
+    return { escolhida: null, aviso: `A comarca de ${escolhida.comarca} não foi encontrada na lista.` };
+  }
+  const aviso = escolhida ? "" : parecidas.length
+    ? `${parecidas.length} promotorias combinam com "${valor}". Escolha uma da lista.`
+    : `Nenhuma promotoria encontrada para "${valor}".`;
+  return { escolhida, aviso };
 }
 
 function escolherPromotoria() {
   const campo = document.getElementById("campo-promotoria");
-  const aviso = document.getElementById("aviso-promotoria");
-  const texto = semAcento(campo.value.trim());
-  if (!texto) return;
-  // Vale o nome exato da lista ou, se só uma promotoria combinar com o que foi digitado, ela
-  const exata = mapaPromotorias.promotorias.find((p) => semAcento(p.nome) === texto);
-  const parecidas = mapaPromotorias.promotorias.filter((p) => semAcento(`${p.nome} ${p.comarca}`).includes(texto));
-  const escolhida = exata || (parecidas.length === 1 ? parecidas[0] : null);
-  if (!escolhida) {
-    aviso.textContent = parecidas.length
-      ? `${parecidas.length} promotorias combinam com "${campo.value}". Escolha uma da lista.`
-      : `Nenhuma promotoria encontrada para "${campo.value}".`;
-    return;
-  }
-  aviso.textContent = "";
-  try {
-    localStorage.setItem(CHAVE_PROMOTORIA, JSON.stringify({ nome: escolhida.nome }));
-  } catch { /* sem localStorage: vale só nesta visita */ }
-  aplicarPromotoria(escolhida);
+  const { escolhida, aviso } = acharPromotoria(campo.value);
+  document.getElementById("aviso-promotoria").textContent = aviso;
+  if (!escolhida) return;
+  promotoriasAtuais = [escolhida];
+  salvarEscolha();
+  aplicarPromotorias();
 }
 
 async function iniciarPromotoria() {
@@ -672,7 +833,7 @@ async function iniciarPromotoria() {
   } catch {
     document.getElementById("nota-promotoria").textContent =
       "Não foi possível carregar a lista de promotorias agora. Tente recarregar a página.";
-    mostrarRegiao(null);
+    mostrarRegioes();
     return;
   }
   const lista = document.getElementById("lista-promotorias");
@@ -686,16 +847,24 @@ async function iniciarPromotoria() {
   campo.addEventListener("keydown", (e) => { if (e.key === "Enter") escolherPromotoria(); });
   document.getElementById("trocar-promotoria").addEventListener("click", pedirPromotoria);
 
-  // Promotoria salva numa visita anterior (com os dados atuais da lista oficial)
-  const salva = mapaPromotorias.promotorias.find((p) => p.nome === nomeSalvo());
-  if (salva && mapaPromotorias.comarcas[salva.comarca]) aplicarPromotoria(salva);
-  else pedirPromotoria();
+  // Promotorias salvas numa visita anterior (com os dados atuais da lista oficial)
+  const salva = escolhaSalva();
+  const achar = (nome) => mapaPromotorias.promotorias.find((p) => p.nome === nome && mapaPromotorias.comarcas[p.comarca]);
+  const principal = salva && achar(salva.nome);
+  if (principal) {
+    const outras = salva.outras.map(achar).filter((p) => p && p !== principal);
+    promotoriasAtuais = [principal, ...new Set(outras)];
+    aplicarPromotorias();
+  } else {
+    pedirPromotoria();
+  }
 }
 
-/** O julgado é pertinente à promotoria: cita o MP ou é de uma das matérias dela. */
+/** O julgado é pertinente às promotorias escolhidas: cita o MP ou é de uma das matérias delas. */
 function pertinente(julgado) {
-  if (!promotoriaAtual) return true;
-  return julgado.interesse_mp.some((m) => m === "Cita o Ministério Público" || promotoriaAtual.materias.includes(m));
+  const perfil = perfilPromotorias();
+  if (!perfil) return true;
+  return julgado.interesse_mp.some((m) => m === "Cita o Ministério Público" || perfil.materias.includes(m));
 }
 
 function atualizarSubtitulo() {

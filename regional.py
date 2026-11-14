@@ -22,6 +22,7 @@ import requests
 
 import coletor
 import informativos
+import instituicoes
 import radar
 
 TIMEOUT = 30
@@ -414,9 +415,12 @@ def dados_promotorias(mapa):
 
 def arquivo_do_local(local, dados, agendas):
     """O que a página recebe de um local: as notícias guardadas mais o radar e as agendas."""
-    if local["tipo"] == "cidade" and dados:
+    if local["tipo"] == "cidade":
         # O radar da página filtra estas notícias pelas matérias da promotoria escolhida
-        dados = {**dados, "noticias": [{**n, "materias": _materias_radar(n)} for n in dados["noticias"]]}
+        dados = dados and {**dados, "noticias": [{**n, "materias": _materias_radar(n)} for n in dados["noticias"]]}
+        # As instituições da comarca valem mesmo antes da primeira coleta das notícias
+        dados = {"nome": local["nome"], "tipo": "cidade", "noticias": None, **(dados or {}),
+                 "municipios": local["municipios"], "instituicoes": instituicoes.das_cidades(local["municipios"])}
     if local["tipo"] == "camara":
         dados = {"nome": local["nome"], "tipo": "camara", "municipios": local["municipios"],
                  **(dados or {"noticias": None}),
