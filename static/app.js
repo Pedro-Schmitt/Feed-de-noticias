@@ -744,13 +744,73 @@ const MOTIVOS_MATERIA = {
 };
 
 
+const ETAPAS_CURTAS = { "Anos iniciais": "anos iniciais", "Anos finais": "anos finais", "Ensino médio": "ensino médio" };
+
+function chaveNome(nome) {
+  return semAcento(nome).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Selos pequenos de uma instituição: o IDEB da escola (comparado com a mediana das escolas públicas
+ * de Goiás), a lotação da unidade prisional ou de acolhimento e os leitos do hospital. */
+function selosInstituicao(tipo, i, municipio, ctx) {
+  const selos = [];
+  for (const n of tipo === "escolas" ? i.ideb || [] : []) {
+    const mediana = ctx.medianas?.[n.etapa];
+    const seta = n.anterior == null ? "" : n.valor > n.anterior ? " ▲" : n.valor < n.anterior ? " ▼" : "";
+    selos.push([`IDEB ${ETAPAS_CURTAS[n.etapa] || n.etapa} ${numeroBr(n.valor, 1)}${seta}`,
+      mediana == null ? "" : n.valor >= mediana ? "bom" : "ruim",
+      `IDEB ${n.ano}, ${n.etapa.toLowerCase()}: ${numeroBr(n.valor, 1)}` +
+      (n.anterior != null ? ` (edição anterior: ${numeroBr(n.anterior, 1)})` : "") +
+      (mediana != null ? ` · mediana das escolas públicas de Goiás: ${numeroBr(mediana, 1)}` : "")]);
+  }
+  if (i.lotacao?.vagas) {
+    const pct = (i.lotacao.ocupados / i.lotacao.vagas) * 100;
+    selos.push([`${numeroBr(pct)}% de lotação`, pct > 100 ? "ruim" : pct >= 85 ? "alerta" : "bom",
+      `${numeroBr(i.lotacao.ocupados)} ${tipo === "prisionais" ? "presos" : "acolhidos"} para ${numeroBr(i.lotacao.vagas)} vagas`]);
+  }
+  const h = tipo === "saude" ? ctx.hospitais?.[municipio]?.get(chaveNome(i.nome)) : null;
+  if (h) {
+    selos.push([`${h.leitos} leitos · ${h.sus} SUS${h.uti ? ` · ${h.uti} UTI` : ""}`, "",
+      `Leitos (CNES): ${h.leitos}, ${h.sus} do SUS · UTI: ${h.uti} (${h.uti_sus} do SUS)`]);
+  }
+  return selos;
+}
+
+/** Indicadores de saúde do município, numa linha pequena no alto da lista das unidades de saúde. */
+function linhaSaudeMunicipio(municipio, ctx) {
+  const m = ctx.ind?.municipios?.[municipio];
+  const go = ctx.ind?.goias?.saude;
+  if (!m?.saude || !go) return null;
+  const p = elemento("p", "instituicoes-indicadores");
+  const partes = [["mortalidade_infantil", "Mortalidade infantil", "por mil nascidos vivos"],
+    ["internacoes_diarreia", "Internações por diarreia", "por 100 mil hab."]];
+  for (const [chave, nome, unidade] of partes) {
+    const dado = m.saude[chave];
+    if (!dado) continue;
+    if (p.childNodes.length) p.append(" · ");
+    const ref = go[chave]?.valor;
+    const valor = elemento("strong", ref == null ? "" : dado.valor > ref ? "ruim" : "bom", numeroBr(dado.valor, 1));
+    p.append(`${nome}: `, valor, ` ${unidade} (${dado.ano}${ref != null ? `; Goiás: ${numeroBr(ref, 1)}` : ""})`);
+  }
+  return p.childNodes.length ? p : null;
+}
+
 /** Uma instituição: o nome abre o endereço completo, o telefone e o link do mapa. */
-function itemInstituicao(i, municipio) {
+function itemInstituicao(i, municipio, selos = []) {
   const li = elemento("li");
   const caixa = elemento("details", "instituicao");
   const resumo = elemento("summary");
   resumo.append(elemento("span", "instituicao-nome", i.nome));
   if (i.detalhe) resumo.append(elemento("span", "instituicoes-detalhe", i.detalhe));
+  if (selos.length) {
+    const linha = elemento("span", "instituicao-selos");
+    for (const [texto, classe, titulo] of selos) {
+      const selo = elemento("span", `selo-instituicao ${classe}`, texto);
+      if (titulo) selo.title = titulo;
+      linha.append(selo);
+    }
+    resumo.append(linha);
+  }
   caixa.append(resumo);
   const contato = elemento("div", "instituicao-contato");
   contato.append(elemento("span", "", i.endereco ? `${i.endereco} · ${municipio}/GO` : `Endereço não informado na base oficial · ${municipio}/GO`));
@@ -771,7 +831,7 @@ function itemInstituicao(i, municipio) {
 /** Um tipo de instituição (escolas, saúde, CRAS...) de uma cidade, como lista que abre e fecha.
  * As unidades de saúde vêm divididas em grupos (tipo da unidade); as escolas só vêm na ordem
  * federais, estaduais, municipais e privadas, sem títulos de grupo. */
-function grupoInstituicoes(tipo, itens, municipio, perfil) {
+function grupoInstituicoes(tipo, itens, municipio, perfil, ctx = {}) {
   const grupo = elemento("details", "instituicoes-grupo");
   const resumo = elemento("summary");
   resumo.append(elemento("span", "instituicoes-nome", tipo.nome), elemento("span", "instituicoes-conta", String(itens.length)));
@@ -782,6 +842,8 @@ function grupoInstituicoes(tipo, itens, municipio, perfil) {
     materias.append(elemento("span", casa ? "etiqueta andamento" : "etiqueta", m), " ");
   });
   grupo.append(materias);
+  const indicadores = tipo.id === "saude" ? linhaSaudeMunicipio(municipio, ctx) : null;
+  if (indicadores) grupo.append(indicadores);
   const ul = elemento("ul", "instituicoes-lista lista-rolagem");
   let atual = null;
   for (const i of itens) {
@@ -790,7 +852,7 @@ function grupoInstituicoes(tipo, itens, municipio, perfil) {
       const quantas = itens.filter((x) => x.grupo === atual).length;
       ul.append(elemento("li", "instituicoes-subgrupo", `${atual} (${quantas})`));
     }
-    ul.append(itemInstituicao(i, municipio));
+    ul.append(itemInstituicao(i, municipio, selosInstituicao(tipo.id, i, municipio, ctx)));
   }
   grupo.append(ul);
   return grupo;
@@ -808,18 +870,27 @@ function painelInstituicoes(dados, perfil) {
     painel.append(elemento("p", "vazio", "A lista de instituições da comarca ainda não está disponível."));
     return painel;
   }
+  // Para os selos: medianas do IDEB em Goiás, indicadores de saúde e leitos de cada hospital (pelo nome)
+  const ind = dados.indicadores;
+  const hospitais = {};
+  for (const [municipio, m] of Object.entries(ind?.municipios || {})) {
+    hospitais[municipio] = new Map();
+    for (const h of m.hospitais || []) if (!hospitais[municipio].has(chaveNome(h.nome))) hospitais[municipio].set(chaveNome(h.nome), h);
+  }
+  const ctx = { medianas: inst.ideb_goias, ind, hospitais };
   const minhas = new Set(perfil.materias);
   const ligadas = inst.tipos.filter((t) => perfil.plena || t.materias.some((m) => minhas.has(m)));
   const outras = inst.tipos.filter((t) => !ligadas.includes(t));
   const dono = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
   painel.append(elemento("p", "nota nota-local",
-    `Por cidade, primeiro as ligadas às matérias ${dono}. Clique num tipo para ver a lista e no nome de uma instituição para ver o endereço, o telefone e o mapa.`));
+    `Por cidade, primeiro as ligadas às matérias ${dono}. Clique num tipo para ver a lista e no nome de uma instituição para ver o endereço, o telefone e o mapa. ` +
+    "Os selos mostram o IDEB de cada escola (verde: igual ou acima da mediana das escolas públicas de Goiás; laranja: abaixo), a lotação das unidades prisionais e de acolhimento e os leitos de cada hospital."));
   for (const [municipio, porTipo] of Object.entries(inst.municipios)) {
     const cidade = elemento("section", "instituicoes-cidade");
     cidade.append(elemento("h3", "", municipio));
     const comItens = (tipos) => tipos.filter((t) => porTipo[t.id]?.length);
     const grade = elemento("div", "instituicoes-grade");
-    comItens(ligadas).forEach((t) => grade.append(grupoInstituicoes(t, porTipo[t.id], municipio, perfil)));
+    comItens(ligadas).forEach((t) => grade.append(grupoInstituicoes(t, porTipo[t.id], municipio, perfil, ctx)));
     if (grade.childElementCount) cidade.append(grade);
     else cidade.append(elemento("p", "vazio", "Nenhuma instituição ligada às suas matérias registrada nas bases oficiais."));
     const fora = comItens(outras);
@@ -828,18 +899,18 @@ function painelInstituicoes(dados, perfil) {
       const demais = elemento("details", "instituicoes-outras");
       demais.append(elemento("summary", "", `Outras instituições de ${municipio}, fora das suas matérias (${total})`));
       const gradeOutras = elemento("div", "instituicoes-grade");
-      fora.forEach((t) => gradeOutras.append(grupoInstituicoes(t, porTipo[t.id], municipio, perfil)));
+      fora.forEach((t) => gradeOutras.append(grupoInstituicoes(t, porTipo[t.id], municipio, perfil, ctx)));
       demais.append(gradeOutras);
       cidade.append(demais);
     }
     painel.append(cidade);
   }
-  const fontes = Object.values(inst.fontes || {});
+  const fontes = [...Object.values(inst.fontes || {}), ind?.fontes?.saude].filter(Boolean);
   if (fontes.length) painel.append(elemento("p", "nota instituicoes-fontes", `Fontes: ${fontes.join("; ")}.`));
   return painel;
 }
 
-// --- Retrato da comarca: violência, lotação, IDEB das escolas e saúde ---
+// --- Violência e segurança pública na comarca ---
 
 // Crimes violentos letais intencionais (CVLI), como no Anuário de Segurança Pública
 const CVLI = ["Homicídio doloso", "Feminicídio", "Latrocínio", "Lesão corporal seguida de morte"];
@@ -875,7 +946,7 @@ function variacao(atual, anterior) {
 
 function blocoRetrato(titulo, nota) {
   const bloco = elemento("section", "retrato-bloco");
-  bloco.append(elemento("h3", "", titulo));
+  if (titulo) bloco.append(elemento("h3", "", titulo));
   if (nota) bloco.append(elemento("p", "nota", nota));
   return bloco;
 }
@@ -918,7 +989,7 @@ function centro(geometria) {
 function blocoViolencia(ind) {
   const municipios = Object.entries(ind.municipios);
   const meses = ind.meses;
-  const bloco = blocoRetrato("Violência e segurança pública",
+  const bloco = blocoRetrato(null,
     `Crimes contra a vida e outros eventos registrados pelas polícias, mês a mês, de ${mesBr(meses[0])} a ${mesBr(meses[meses.length - 1])}. ` +
     "Mortes violentas intencionais (CVLI) = homicídio doloso, feminicídio, latrocínio e lesão corporal seguida de morte. " +
     "Em municípios pequenos poucos casos mudam muito a taxa: compare períodos de 12 meses.");
@@ -1040,167 +1111,20 @@ function blocoViolencia(ind) {
 }
 
 /** Ocupação das unidades com vagas: presídios, acolhimento de crianças e adolescentes e de idosos. */
-function blocoLotacao(inst) {
-  const tipos = [["prisionais", "Unidade prisional"], ["acolhimento", "Acolhimento infantojuvenil"], ["idosos", "Acolhimento de idosos/PcD"]];
-  const unidades = [];
-  for (const [municipio, porTipo] of Object.entries(inst.municipios)) {
-    for (const [tipo, rotulo] of tipos) {
-      for (const i of porTipo[tipo] || []) {
-        if (i.lotacao?.vagas) unidades.push({ ...i, municipio, rotulo, pct: (i.lotacao.ocupados / i.lotacao.vagas) * 100 });
-      }
-    }
-  }
-  const bloco = blocoRetrato("Lotação das unidades",
-    "Ocupação de cada unidade: presos sobre vagas (SISDEPEN) e acolhidos sobre a capacidade (Censo SUAS). Acima de 100%, superlotação.");
-  if (!unidades.length) {
-    bloco.append(elemento("p", "vazio", "Nenhuma unidade prisional ou de acolhimento com vagas informadas nas bases oficiais."));
-    return bloco;
-  }
-  unidades.sort((a, b) => a.pct - b.pct);
-  const varias = Object.keys(inst.municipios).length > 1;
-  const nomes = unidades.map((u) => `${u.nome.length > 42 ? u.nome.slice(0, 40) + "…" : u.nome}${varias ? ` (${u.municipio})` : ""}`);
-  const grafico = graficoRetrato(bloco, Math.max(170, 46 * unidades.length + 70));
-  desenharDepois(grafico, [{
-    type: "bar", orientation: "h", y: nomes, x: unidades.map((u) => u.pct),
-    marker: { color: unidades.map((u) => (u.pct > 100 ? "#c92a2a" : u.pct >= 85 ? "#f08c00" : "#2f9e44")) },
-    text: unidades.map((u) => `${numeroBr(u.pct)}% · ${u.lotacao.ocupados} de ${u.lotacao.vagas}`),
-    textposition: "outside", cliponaxis: false,
-    customdata: unidades.map((u) => `${u.rotulo} · ${u.municipio}`),
-    hovertemplate: "<b>%{y}</b><br>%{customdata}<br>%{text}<extra></extra>",
-  }], {
-    margin: { l: 10, r: 90, t: 10, b: 30 },
-    xaxis: { ticksuffix: "%", gridcolor: corGrade, rangemode: "tozero", range: [0, Math.max(120, ...unidades.map((u) => u.pct)) * 1.15] },
-    yaxis: { automargin: true },
-    shapes: [{ type: "line", x0: 100, x1: 100, yref: "paper", y0: 0, y1: 1, line: { color: corSuave, dash: "dot", width: 1.5 } }],
-  });
-  return bloco;
-}
-
-/** IDEB de cada escola da comarca, por etapa, com a mediana das escolas públicas de Goiás. */
-function blocoIdeb(inst) {
-  const etapas = ["Anos iniciais", "Anos finais", "Ensino médio"];
-  const medianas = inst.ideb_goias || {};
-  const varias = Object.keys(inst.municipios).length > 1;
-  const bloco = blocoRetrato("Qualidade das escolas (IDEB)",
-    "Índice de Desenvolvimento da Educação Básica de cada escola (0 a 10), que junta aprovação e desempenho na prova do SAEB. " +
-    "A linha pontilhada é a mediana das escolas públicas de Goiás. Escolas privadas e as que não fizeram a prova não têm IDEB.");
-  let algum = false;
-  for (const etapa of etapas) {
-    const escolas = [];
-    for (const [municipio, porTipo] of Object.entries(inst.municipios)) {
-      for (const e of porTipo.escolas || []) {
-        const nota = (e.ideb || []).find((x) => x.etapa === etapa);
-        if (nota) escolas.push({ ...e, municipio, nota });
-      }
-    }
-    if (!escolas.length) continue;
-    algum = true;
-    escolas.sort((a, b) => a.nota.valor - b.nota.valor);
-    const ano = Math.max(...escolas.map((e) => e.nota.ano));
-    const mediana = medianas[etapa];
-    const grafico = graficoRetrato(bloco, Math.max(160, 26 * escolas.length + 80));
-    desenharDepois(grafico, [{
-      type: "bar", orientation: "h",
-      y: escolas.map((e) => `${e.nome.length > 44 ? e.nome.slice(0, 42) + "…" : e.nome}${varias ? ` (${e.municipio})` : ""}`),
-      x: escolas.map((e) => e.nota.valor),
-      marker: { color: escolas.map((e) => (mediana && e.nota.valor < mediana ? "#e8590c" : "#1c7ed6")) },
-      text: escolas.map((e) => numeroBr(e.nota.valor, 1) + (e.nota.ano < ano ? ` (${e.nota.ano})` : "")),
-      textposition: "outside", cliponaxis: false,
-      customdata: escolas.map((e) => [e.detalhe?.split(" · ")[0] || "", e.nota.anterior != null
-        ? `Edição anterior: ${numeroBr(e.nota.anterior, 1)} (${e.nota.valor > e.nota.anterior ? "subiu" : e.nota.valor < e.nota.anterior ? "caiu" : "igual"})`
-        : "Sem nota na edição anterior"]),
-      hovertemplate: "<b>%{y}</b><br>%{customdata[0]} · IDEB %{x:.1f}<br>%{customdata[1]}<extra></extra>",
-    }], {
-      title: { text: `${etapa} · IDEB ${ano}${mediana ? ` · mediana de Goiás ${numeroBr(mediana, 1)}` : ""}`, font: { size: 14 } },
-      margin: { l: 10, r: 50, t: 40, b: 30 },
-      xaxis: { range: [0, 10], gridcolor: corGrade, dtick: 1 },
-      yaxis: { automargin: true, tickfont: { size: 11 } },
-      shapes: mediana ? [{ type: "line", x0: mediana, x1: mediana, yref: "paper", y0: 0, y1: 1, line: { color: corSuave, dash: "dot", width: 1.5 } }] : [],
-    });
-  }
-  if (!algum) bloco.append(elemento("p", "vazio", "Nenhuma escola da comarca com IDEB divulgado."));
-  return bloco;
-}
-
-/** Saúde: indicadores de cada município comparados com Goiás e os leitos de cada hospital. */
-function blocoSaude(ind) {
-  const municipios = Object.entries(ind.municipios);
-  const go = ind.goias;
-  const bloco = blocoRetrato("Saúde",
-    "Não há nota oficial de qualidade por hospital ou UBS; estes indicadores mostram o resultado e a estrutura da saúde em cada município, comparados com Goiás. " +
-    "Mortalidade infantil e internações por diarreia altas costumam indicar falhas na atenção básica e no saneamento.");
-  const tabela = elemento("table", "retrato-tabela");
-  const cab = elemento("tr");
-  const colunas = [["mortalidade_infantil", "Mortalidade infantil", "por mil nascidos vivos"],
-    ["internacoes_diarreia", "Internações por diarreia", "por 100 mil hab."]];
-  ["Município", ...colunas.map((c) => `${c[1]} (${c[2]})`), "Leitos SUS por mil hab.", "Leitos de UTI SUS"].forEach((t) => cab.append(elemento("th", "", t)));
-  tabela.append(elemento("thead"));
-  tabela.tHead.append(cab);
-  const corpo = elemento("tbody");
-  const celula = (valor, referencia, casas, maiorPior = true) => {
-    if (valor == null) return elemento("td", "", "—");
-    const pior = referencia != null && (maiorPior ? valor > referencia : valor < referencia);
-    return elemento("td", referencia != null ? (pior ? "piora" : "melhora") : "", numeroBr(valor, casas));
-  };
-  const leitosPorMil = (sus, pop) => (pop ? (sus / pop) * 1000 : null);
-  const refLeitos = leitosPorMil(go.leitos_sus, go.populacao);
-  for (const [nome, m] of [...municipios, ["Goiás", null]]) {
-    const tr = elemento("tr", m ? "" : "retrato-referencia");
-    tr.append(elemento("td", "", nome));
-    for (const [chave] of colunas) {
-      const dado = m ? m.saude[chave] : go.saude[chave];
-      const td = celula(dado?.valor, m ? go.saude[chave]?.valor : null, chave === "mortalidade_infantil" ? 1 : 1);
-      if (dado) td.title = `Dado de ${dado.ano}`;
-      if (dado) td.append(elemento("small", "", ` (${dado.ano})`));
-      tr.append(td);
-    }
-    const sus = m ? somar(m.hospitais.map((h) => h.sus)) : go.leitos_sus;
-    const uti = m ? somar(m.hospitais.map((h) => h.uti_sus)) : go.uti_sus;
-    tr.append(celula(leitosPorMil(sus, m ? m.populacao : go.populacao), m ? refLeitos : null, 2, false), elemento("td", "", numeroBr(uti)));
-    corpo.append(tr);
-  }
-  tabela.append(corpo);
-  const rolagem = elemento("div", "retrato-tabela-rolagem");
-  rolagem.append(tabela);
-  bloco.append(rolagem);
-
-  const hospitais = municipios.flatMap(([municipio, m]) => m.hospitais.map((h) => ({ ...h, municipio })));
-  if (hospitais.length) {
-    hospitais.sort((a, b) => a.leitos - b.leitos);
-    const varias = municipios.length > 1;
-    const nomes = hospitais.map((h) => `${h.nome.length > 40 ? h.nome.slice(0, 38) + "…" : h.nome}${varias ? ` (${h.municipio})` : ""}`);
-    const grafico = graficoRetrato(bloco, Math.max(160, 30 * hospitais.length + 90));
-    desenharDepois(grafico, [
-      { type: "bar", orientation: "h", name: "Leitos SUS", y: nomes, x: hospitais.map((h) => h.sus), marker: { color: "#1c7ed6" },
-        customdata: hospitais.map((h) => [h.uti, h.uti_sus]),
-        hovertemplate: "<b>%{y}</b><br>Leitos SUS: %{x}<br>UTI: %{customdata[0]} (SUS: %{customdata[1]})<extra></extra>" },
-      { type: "bar", orientation: "h", name: "Leitos não SUS", y: nomes, x: hospitais.map((h) => h.leitos - h.sus), marker: { color: "#adb5bd" },
-        hovertemplate: "<b>%{y}</b><br>Leitos não SUS: %{x}<extra></extra>" },
-    ], {
-      barmode: "stack", title: { text: "Leitos por hospital (CNES)", font: { size: 14 } },
-      margin: { l: 10, r: 20, t: 40, b: 30 }, xaxis: { gridcolor: corGrade }, yaxis: { automargin: true, tickfont: { size: 11 } },
-      legend: { orientation: "h", y: -0.12 },
-    });
-  }
-  return bloco;
-}
-
-/** Retrato da comarca, abaixo das instituições. */
+/** Violência na comarca, abaixo das instituições (a qualidade e a lotação de cada instituição
+ * aparecem nela mesma, na lista). */
 function painelRetrato(dados) {
   const painel = elemento("section", "painel secao retrato");
   painel.style.setProperty("--cor", "#c92a2a");
-  painel.append(elemento("h2", "", "Retrato da comarca em números"));
+  painel.append(elemento("h2", "", "Violência e segurança pública na comarca"));
   const ind = dados?.indicadores;
-  const inst = dados?.instituicoes;
-  if (!ind && !inst) {
-    painel.append(elemento("p", "vazio", "Os indicadores da comarca ainda não estão disponíveis."));
+  if (!ind) {
+    painel.append(elemento("p", "vazio", "Os dados de segurança pública da comarca ainda não estão disponíveis."));
     return painel;
   }
   if (dados.municipios?.length > 1) painel.append(elemento("p", "nota nota-local", juntarNomes(dados.municipios)));
   if (ind) painel.append(blocoViolencia(ind));
-  if (inst) painel.append(blocoLotacao(inst), blocoIdeb(inst));
-  if (ind) painel.append(blocoSaude(ind));
-  const fontes = [...Object.values(ind?.fontes || {}), inst?.fontes?.escolas, inst?.fontes?.prisionais, inst?.fontes?.assistencia].filter(Boolean);
+  const fontes = [ind?.fontes?.violencia, ind?.fontes?.populacao].filter(Boolean);
   painel.append(elemento("p", "nota instituicoes-fontes", `Fontes: ${fontes.join("; ")}.`));
   return painel;
 }

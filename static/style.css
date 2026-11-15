@@ -810,13 +810,13 @@ footer { padding-bottom: 24px; }
 .instituicoes, .retrato { grid-column: 1 / -1; }
 .instituicoes-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-items: start; }
 .instituicoes-grupo { border: 1px solid var(--borda); border-radius: 12px; padding: 0 14px; }
-.instituicoes-grupo summary {
+.instituicoes-grupo > summary {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 12px 0; cursor: pointer; font-weight: 600; list-style: none;
 }
-.instituicoes-grupo summary::-webkit-details-marker { display: none; }
-.instituicoes-grupo summary::before { content: "▸"; color: var(--cor); flex: none; transition: transform 0.15s; }
-.instituicoes-grupo[open] summary::before { transform: rotate(90deg); }
+.instituicoes-grupo > summary::-webkit-details-marker { display: none; }
+.instituicoes-grupo > summary::before { content: "▸"; color: var(--cor); flex: none; transition: transform 0.15s; }
+.instituicoes-grupo[open] > summary::before { transform: rotate(90deg); }
 .instituicoes-nome { flex: 1; }
 .instituicoes-conta {
   flex: none; min-width: 28px; padding: 2px 8px; border-radius: 999px; text-align: center; font-size: 0.8rem;
@@ -973,3 +973,16 @@ a.resumo-titulo:hover { text-decoration: underline; }
   color: var(--cor); font: inherit; font-size: 0.82rem; font-weight: 600;
 }
 .resumo-ir:hover { background: color-mix(in srgb, var(--cor) 10%, transparent); }
+
+/* --- Selos das instituições: IDEB, lotação e leitos --- */
+.instituicao-selos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.selo-instituicao {
+  font-size: 0.68rem; font-weight: 600; line-height: 1.5; padding: 0 7px; border-radius: 999px;
+  color: var(--suave); background: color-mix(in srgb, var(--suave) 13%, transparent);
+}
+.selo-instituicao.bom { color: #2f9e44; background: color-mix(in srgb, #2f9e44 13%, transparent); }
+.selo-instituicao.alerta { color: #e67700; background: color-mix(in srgb, #e67700 14%, transparent); }
+.selo-instituicao.ruim { color: #d9480f; background: color-mix(in srgb, #d9480f 13%, transparent); }
+.instituicoes-indicadores { margin: -2px 0 8px; font-size: 0.75rem; color: var(--suave); line-height: 1.45; }
+.instituicoes-indicadores .ruim { color: #d9480f; }
+.instituicoes-indicadores .bom { color: #2f9e44; }
