@@ -13,7 +13,9 @@ from urllib.parse import quote, urlsplit
 import requests
 
 import editais
+import esump
 import informativos
+import normas
 
 TIMEOUT = 20
 JANELA = timedelta(hours=48)  # notícias mais antigas que isso ficam de fora
@@ -542,6 +544,8 @@ def coletar():
         futuros_orgaos = [executor.submit(buscar_google_noticias, busca) for _, busca in ORGAOS]
         futuro_informativos = executor.submit(informativos.coletar)
         futuro_editais = executor.submit(editais.coletar)
+        futuro_esump = executor.submit(esump.coletar)
+        futuro_normas = executor.submit(normas.coletar)
 
     noticias, vistos, falhas = [], set(), []
     for (veiculo, _, url), futuro in zip(FEEDS, futuros):
@@ -605,6 +609,8 @@ def coletar():
         "orgaos": orgaos,
         "informativos": futuro_informativos.result(),
         "editais": _resultado_ou_none(futuro_editais, "editais do MPGO"),
+        "esump": _resultado_ou_none(futuro_esump, "eventos da ESUMP"),
+        **(_resultado_ou_none(futuro_normas, "CNMP, CNJ e legislação") or {"conselhos": None, "legislacao": None}),
     }
 
 

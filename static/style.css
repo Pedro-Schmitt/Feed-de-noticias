@@ -834,3 +834,34 @@ footer { padding-bottom: 24px; }
   .instituicoes-grade { grid-template-columns: 1fr; }
   .outra-promotoria { flex-direction: column; align-items: flex-start; }
 }
+
+/* --- Cursos e eventos da ESUMP (quadro MPGO, abaixo das três colunas) --- */
+.esump { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--borda); }
+.esump-lista {
+  list-style: none; margin: 0 0 10px; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;
+}
+.esump-lista li {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 10px 12px; border: 1px solid var(--borda); border-radius: 12px;
+}
+.esump-data {
+  flex: none; display: flex; flex-direction: column; align-items: center; min-width: 54px;
+  padding: 4px 6px; border-radius: 8px; background: color-mix(in srgb, var(--cor) 12%, transparent); color: var(--cor);
+}
+.esump-data strong { font-size: 1rem; }
+.esump-data span { font-size: 0.7rem; }
+.esump-texto { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.esump-texto a { font-size: 0.88rem; font-weight: 600; line-height: 1.35; }
+.esump-texto a:hover { color: var(--cor); text-decoration: underline; }
+
+/* --- Atos do CNMP e do CNJ e leis novas --- */
+.normas .norma-titulo { display: block; font-size: 0.85rem; font-weight: 700; color: var(--cor); margin-bottom: 4px; }
+.normas .norma-titulo:hover { text-decoration: underline; }
+.normas .julgado-tese { font-size: 0.88rem; }
+
+/* Instituições fora das matérias, recolhidas abaixo das ligadas a elas */
+.instituicoes-outras { margin-top: 14px; }
+.instituicoes-outras > summary { cursor: pointer; font-size: 0.88rem; font-weight: 600; color: var(--suave); padding: 6px 0 10px; }
+.instituicoes-outras > summary:hover { color: var(--cor); }
+.instituicoes-lista li .instituicoes-detalhe + .instituicoes-detalhe { margin-top: 1px; }

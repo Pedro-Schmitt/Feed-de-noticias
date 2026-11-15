@@ -230,6 +230,43 @@ function blocoEditais(dados) {
   return bloco;
 }
 
+const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+/** Próximos cursos e eventos da Escola Superior (quadro MPGO), em cartões com a data. */
+function blocoEsump(dados) {
+  const bloco = elemento("div", "esump");
+  bloco.append(elemento("h3", "titulo-agenda", "Próximos cursos e eventos da ESUMP"));
+  if (!dados) {
+    bloco.append(elemento("p", "vazio", "Não foi possível consultar os eventos da Escola Superior agora."));
+    return bloco;
+  }
+  if (!dados.eventos.length) {
+    bloco.append(elemento("p", "vazio", "Nenhum curso ou evento divulgado para os próximos dias."));
+  } else {
+    const lista = elemento("ul", "esump-lista");
+    for (const e of dados.eventos) {
+      const li = elemento("li");
+      const data = elemento("span", "esump-data");
+      if (e.data) {
+        const dia = new Date(`${e.data}T12:00:00`);
+        data.append(elemento("strong", "", dataCurta(e.data)), elemento("span", "", DIAS_SEMANA[dia.getDay()]));
+      } else {
+        data.append(elemento("strong", "", "—"), elemento("span", "", "data no texto"));
+      }
+      const texto = elemento("div", "esump-texto");
+      texto.append(linkExterno(e.link, e.titulo));
+      if (e.inscricoes) texto.append(elemento("span", "etiqueta andamento", "Inscrições abertas"));
+      li.append(data, texto);
+      lista.append(li);
+    }
+    bloco.append(lista);
+  }
+  const todos = elemento("p", "editais-resumo");
+  todos.append(linkExterno(dados.pagina, "Todos os cursos e eventos no portal do MPGO"));
+  bloco.append(todos);
+  return bloco;
+}
+
 // Links fixos no fim de alguns quadros jurídicos
 const LINKS_JURIDICO = {
   mpgo: [
@@ -288,7 +325,7 @@ function montarJuridico() {
       csmp.classList.add("painel-interno");
       colunas.append(csmp);
     }
-    mpgo.append(colunas);
+    mpgo.append(colunas, blocoEsump(noticias.esump));
   }
   preencherAgendas();
 }
@@ -398,6 +435,102 @@ function montarInformativos() {
       painel.append(corpo);
     }
     container.append(painel);
+  }
+  montarNormas();
+}
+
+/** Data ISO (aaaa-mm-dd) como dd/mm/aaaa. */
+function dataBr(iso) {
+  const [ano, mes, dia] = iso.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+/** Um ato do CNMP ou do CNJ ou uma lei nova vale para as promotorias escolhidas? Os atos do CNMP
+ * sem matéria específica (carreira, funcionamento do MP) valem para todo membro. */
+function normaPertinente(item, todoMembro) {
+  const perfil = perfilPromotorias();
+  if (!perfil || perfil.plena || filtroJurisprudencia === "todos") return true;
+  if (!item.materias.length) return todoMembro;
+  return item.materias.some((m) => perfil.materias.includes(m));
+}
+
+/** Lista de atos ou leis, com a data, a ementa e as matérias (as das promotorias em destaque). */
+function listaNormas(itens, todoMembro) {
+  const perfil = perfilPromotorias();
+  const lista = elemento("ul", "julgados normas");
+  for (const item of itens) {
+    const li = elemento("li");
+    const tema = [item.titulo, item.data ? dataBr(item.data) : "", item.situacao && item.situacao !== "Vigente" ? item.situacao : ""];
+    const titulo = linkExterno(item.link, tema.filter(Boolean).join(" · "));
+    titulo.className = "norma-titulo";
+    li.append(titulo, elemento("p", "julgado-tese", item.ementa));
+    const etiquetas = elemento("div", "julgado-etiquetas");
+    for (const m of item.materias) {
+      const casa = perfil && !perfil.plena && perfil.materias.includes(m);
+      etiquetas.append(elemento("span", casa ? "etiqueta andamento" : "etiqueta", m));
+    }
+    if (!item.materias.length && todoMembro) etiquetas.append(elemento("span", "etiqueta indefinido", "Carreira e funcionamento do MP"));
+    if (etiquetas.childElementCount) li.append(etiquetas);
+    lista.append(li);
+  }
+  return lista;
+}
+
+/** Quadro de atos ou de leis: resumo de quantos são pertinentes, a lista rolando por dentro e o link da fonte. */
+function painelNormas(nome, cor, itens, { todoMembro = false, fonte, vazio }) {
+  const painel = elemento("section", "painel secao informativo");
+  painel.style.setProperty("--cor", cor);
+  painel.append(elemento("h2", "", nome));
+  if (!itens) {
+    painel.append(elemento("p", "vazio", "Não foi possível consultar a fonte agora."));
+    return painel;
+  }
+  const perfil = perfilPromotorias();
+  const filtrando = perfil && !perfil.plena && filtroJurisprudencia === "promotoria";
+  const escolhidos = itens.filter((i) => normaPertinente(i, todoMembro));
+  const minhas = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
+  const resumo = elemento("p", "informativo-resumo",
+    filtrando ? `${escolhidos.length} de ${itens.length} pertinentes às matérias ${minhas} · ` : `${itens.length} mais recentes · `);
+  resumo.append(linkExterno(fonte[1], fonte[0]));
+  painel.append(resumo);
+  if (!escolhidos.length) {
+    painel.append(elemento("p", "vazio", filtrando ? `Nenhum é pertinente às matérias ${minhas}.` : vazio));
+  } else {
+    const corpo = elemento("div", "informativo-corpo");
+    corpo.append(listaNormas(escolhidos, todoMembro));
+    painel.append(corpo);
+  }
+  return painel;
+}
+
+/** Entendimentos do CNMP e do CNJ e novidades legislativas (federais e de Goiás), abaixo dos informativos. */
+function montarNormas() {
+  const conselhos = document.getElementById("conselhos");
+  const c = noticias.conselhos || {};
+  conselhos.replaceChildren(
+    painelNormas("CNMP", "#8b5cf6", c.cnmp, {
+      todoMembro: true, vazio: "Nenhum ato recente.",
+      fonte: ["Atos e normas no site do CNMP", "https://www.cnmp.mp.br/portal/atos-e-normas"],
+    }),
+    painelNormas("CNJ", "#0c9fb5", c.cnj, {
+      vazio: "Nenhum ato recente.", fonte: ["Atos normativos no site do CNJ", "https://atos.cnj.jus.br/atos"],
+    }),
+  );
+  const leis = noticias.legislacao || {};
+  const legislacao = document.getElementById("legislacao");
+  legislacao.replaceChildren(
+    painelNormas("Leis federais", "#0f9d58", leis.federal, {
+      vazio: "Nenhuma lei nova no período.",
+      fonte: ["Legislação no Planalto", "https://www4.planalto.gov.br/legislacao/"],
+    }),
+    painelNormas("Leis de Goiás", "#c9a227", leis.estadual, {
+      vazio: "Nenhuma lei nova no período.",
+      fonte: ["Legislação no site da Casa Civil de Goiás", "https://legisla.casacivil.go.gov.br/pesquisa_legislacao"],
+    }),
+  );
+  const nota = document.getElementById("nota-legislacao");
+  if (nota && leis.dias) {
+    nota.textContent = `Leis, leis complementares e emendas constitucionais federais e de Goiás dos últimos ${leis.dias} dias, sem as de homenagens, datas comemorativas e créditos orçamentários. As matérias são indicadas pela ementa.`;
   }
 }
 
@@ -584,8 +717,44 @@ const MOTIVOS_MATERIA = {
 };
 
 
-/** Instituições das cidades da comarca ligadas às matérias das promotorias: escolas, hospitais,
- * UBS, CAPS, unidades prisionais e unidades de acolhimento (bases oficiais, em dados/instituicoes.json). */
+/** Um tipo de instituição (escolas, CRAS...) como lista que abre e fecha, com as do município ou da comarca. */
+function grupoInstituicoes(tipo, inst, cidades, perfil) {
+  const itens = cidades.flatMap((c) => (inst.municipios[c][tipo.id] || []).map((i) => ({ ...i, municipio: c })));
+  const grupo = elemento("details", "instituicoes-grupo");
+  const resumo = elemento("summary");
+  resumo.append(elemento("span", "instituicoes-nome", tipo.nome), elemento("span", "instituicoes-conta", String(itens.length)));
+  grupo.append(resumo);
+  const materias = elemento("p", "radar-etiquetas");
+  tipo.materias.forEach((m) => {
+    const casa = !perfil.plena && perfil.materias.includes(m);
+    materias.append(elemento("span", casa ? "etiqueta andamento" : "etiqueta", m), " ");
+  });
+  grupo.append(materias);
+  if (!itens.length) {
+    grupo.append(elemento("p", "vazio", "Nenhuma registrada nas bases oficiais."));
+    return grupo;
+  }
+  const ul = elemento("ul", "instituicoes-lista lista-rolagem");
+  for (const i of itens) {
+    const li = elemento("li");
+    // Com endereço (bases da assistência social), o mapa procura o endereço: o nome às vezes é genérico
+    const busca = i.endereco ? `${i.endereco}, ${i.municipio} - GO` : `${i.nome}, ${i.municipio} - GO`;
+    const nome = linkExterno(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, i.nome);
+    nome.title = "Ver no mapa";
+    li.append(nome);
+    const detalhe = [i.detalhe, cidades.length > 1 ? i.municipio : ""].filter(Boolean).join(" · ");
+    if (detalhe) li.append(elemento("span", "instituicoes-detalhe", detalhe));
+    const contato = [i.endereco, i.telefone ? `Tel. ${i.telefone}` : ""].filter(Boolean).join(" · ");
+    if (contato) li.append(elemento("span", "instituicoes-detalhe", contato));
+    ul.append(li);
+  }
+  grupo.append(ul);
+  return grupo;
+}
+
+/** Instituições das cidades da comarca: primeiro as ligadas às matérias das promotorias escolhidas
+ * (escolas, saúde, assistência social, presídio, acolhimento...); as outras, numa parte recolhida
+ * logo abaixo, para nada da comarca ficar de fora. Bases oficiais, em dados/instituicoes.json. */
 function painelInstituicoes(dados, perfil) {
   const painel = elemento("section", "painel secao instituicoes");
   painel.style.setProperty("--cor", "#5f3dc4");
@@ -597,43 +766,27 @@ function painelInstituicoes(dados, perfil) {
   }
   const cidades = Object.keys(inst.municipios);
   const minhas = new Set(perfil.materias);
-  const tipos = inst.tipos.filter((t) => perfil.plena || t.materias.some((m) => minhas.has(m)));
+  const ligadas = inst.tipos.filter((t) => perfil.plena || t.materias.some((m) => minhas.has(m)));
+  const outras = inst.tipos.filter((t) => !ligadas.includes(t));
   const dono = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
   painel.append(elemento("p", "nota nota-local",
-    `${cidades.length > 1 ? `Em ${juntarNomes(cidades)}, ligadas` : "Ligadas"} às matérias ${dono}. Clique num tipo para ver a lista.`));
-  if (!tipos.length) {
+    `${cidades.length > 1 ? `Em ${juntarNomes(cidades)}, ligadas` : "Ligadas"} às matérias ${dono}. Clique num tipo para ver a lista; cada nome abre no mapa.`));
+  if (ligadas.length) {
+    const grade = elemento("div", "instituicoes-grade");
+    ligadas.forEach((t) => grade.append(grupoInstituicoes(t, inst, cidades, perfil)));
+    painel.append(grade);
+  } else {
     painel.append(elemento("p", "vazio", "Nenhum tipo de instituição da lista está ligado às suas matérias."));
-    return painel;
   }
-  const grade = elemento("div", "instituicoes-grade");
-  for (const tipo of tipos) {
-    const itens = cidades.flatMap((c) => (inst.municipios[c][tipo.id] || []).map((i) => ({ ...i, municipio: c })));
-    const grupo = elemento("details", "instituicoes-grupo");
-    const resumo = elemento("summary");
-    resumo.append(elemento("span", "instituicoes-nome", tipo.nome), elemento("span", "instituicoes-conta", String(itens.length)));
-    grupo.append(resumo);
-    const materias = elemento("p", "radar-etiquetas");
-    tipo.materias.forEach((m) => materias.append(elemento("span", "etiqueta", m), " "));
-    grupo.append(materias);
-    if (!itens.length) {
-      grupo.append(elemento("p", "vazio", "Nenhuma registrada nas bases oficiais."));
-    } else {
-      const ul = elemento("ul", "instituicoes-lista lista-rolagem");
-      for (const i of itens) {
-        const li = elemento("li");
-        const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${i.nome}, ${i.municipio} - GO`)}`;
-        const nome = linkExterno(mapa, i.nome);
-        nome.title = "Ver no mapa";
-        const detalhe = [i.detalhe, cidades.length > 1 ? i.municipio : ""].filter(Boolean).join(" · ");
-        li.append(nome);
-        if (detalhe) li.append(elemento("span", "instituicoes-detalhe", detalhe));
-        ul.append(li);
-      }
-      grupo.append(ul);
-    }
-    grade.append(grupo);
+  if (outras.length) {
+    const total = outras.reduce((soma, t) => soma + cidades.reduce((n, c) => n + (inst.municipios[c][t.id] || []).length, 0), 0);
+    const demais = elemento("details", "instituicoes-outras");
+    demais.append(elemento("summary", "", `Outras instituições da comarca, fora das suas matérias (${total})`));
+    const grade = elemento("div", "instituicoes-grade");
+    outras.forEach((t) => grade.append(grupoInstituicoes(t, inst, cidades, perfil)));
+    demais.append(grade);
+    painel.append(demais);
   }
-  painel.append(grade);
   const fontes = Object.values(inst.fontes || {});
   if (fontes.length) painel.append(elemento("p", "nota instituicoes-fontes", `Fontes: ${fontes.join("; ")}.`));
   return painel;

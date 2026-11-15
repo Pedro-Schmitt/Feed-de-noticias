@@ -1,20 +1,22 @@
 """Instituições das cidades da comarca que merecem o acompanhamento do Promotor: escolas,
-hospitais, UBS, CAPS, unidades prisionais e unidades de acolhimento, cada tipo ligado às matérias
-de atribuição a que diz respeito.
+hospitais, UBS, CAPS, CRAS, CREAS, Centros POP, unidades prisionais, unidades de acolhimento e
+centros-dia, cada tipo ligado às matérias de atribuição a que diz respeito.
 
 As bases são oficiais e públicas, mas grandes e atualizadas uma ou duas vezes por ano; por isso
 ficam numa cópia em dados/instituicoes.json, só com os municípios de Goiás. Para atualizar:
 
-    python instituicoes.py --atualizar [--censo microdados_censo_escolar_AAAA.zip]
+    python instituicoes.py --atualizar [--censo microdados_censo_escolar_AAAA.zip | --manter-escolas]
 
 (o servidor do INEP às vezes manda a cadeia de certificados incompleta e o Python recusa a
-conexão; nesse caso, baixe o .zip pelo navegador ou pelo curl e passe o caminho em --censo)
+conexão; nesse caso, baixe o .zip pelo navegador ou pelo curl e passe o caminho em --censo, ou
+use --manter-escolas para atualizar o resto e reaproveitar as escolas da cópia atual)
 
 Fontes:
 - Escolas: Censo Escolar do INEP (microdados da educação básica), escolas em atividade.
 - Hospitais, prontos-socorros, UBS e CAPS: CNES, pela API de dados abertos do Ministério da Saúde.
 - Unidades prisionais: SISDEPEN (Senappen), estabelecimentos com cela física.
-- Acolhimento: Censo SUAS (MDS), unidades de acolhimento por público atendido.
+- Assistência social (CRAS, CREAS, Centro POP, centro-dia, acolhimento e família acolhedora):
+  Censo SUAS (MDS), com endereço e telefone informados pelas próprias unidades.
 """
 
 import csv
@@ -36,20 +38,41 @@ CENSO_ESCOLAR = "https://download.inep.gov.br/dados_abertos/microdados_censo_esc
 CNES = "https://apidadosabertos.saude.gov.br/cnes/estabelecimentos"
 SISDEPEN = ("https://www.gov.br/senappen/pt-br/servicos/sisdepen/bases-de-dados/2025/"
             "19o-ciclo-base-de-dados-2025-2-semestre.csv/@@download/file")
-CENSO_SUAS = ("https://raw.githubusercontent.com/Sagicad-MDS/censo-suas-2024/main/Censo%20SUAS%202024/"
-              "4%20-%20UNIDADE%20DE%20ACOLHIMENTO/Censo_SUAS_2024_Unidade_Acolhimento_Dados_Gerais.csv")
+IBGE_MUNICIPIOS = "https://servicodados.ibge.gov.br/api/v1/localidades/estados/52/municipios"
+CENSO_SUAS = "https://raw.githubusercontent.com/Sagicad-MDS/censo-suas-2024/main/Censo%20SUAS%202024/"
+# Arquivo de cada unidade do Censo SUAS e a coluna do telefone (muda de um questionário para outro)
+SUAS_ARQUIVOS = {
+    "cras": ("1_CRAS/Censo_SUAS_2024_CRAS_Dados_Gerais.csv", "q0_12"),
+    "creas": ("2_CREAS/Censo_SUAS_2024_CREAS_Dados_Gerais.csv", "q0_12"),
+    "pop": ("3_CENTRO%20POP/Censo_SUAS_2024_Centro_POP_Dados_Gerais.csv", "q0_12"),
+    "acolhimento": ("4%20-%20UNIDADE%20DE%20ACOLHIMENTO/Censo_SUAS_2024_Unidade_Acolhimento_Dados_Gerais.csv", "q0_12"),
+    "centrodia": ("6_CENTRO%20DIA/Censo_SUAS_2024_Centro_Dia_Dados_Gerais.csv", "q0_11"),
+    "familia": ("7_FAM%C3%8DLIA%20ACOLHEDORA/Censo_SUAS_2024_Familia_Acolhedora_Dados_Gerais.csv", "q0_12"),
+}
 
-# Tipos de instituição, na ordem em que aparecem, com as matérias de atribuição de cada um
+# Tipos de instituição, na ordem em que aparecem, com as matérias de atribuição de cada um.
+# "Cidadania" entra onde a promotoria do cidadão costuma atuar nas comarcas menores (saúde,
+# educação, idosos, assistência social); "Criminal" leva às unidades prisionais porque, sem vara
+# de execução própria, é a promotoria criminal que acompanha o presídio
 TIPOS = [
-    {"id": "escolas", "nome": "Escolas", "materias": ["Educação", "Infância e juventude"]},
-    {"id": "hospitais", "nome": "Hospitais e unidades de pronto atendimento", "materias": ["Saúde"]},
-    {"id": "ubs", "nome": "Unidades Básicas de Saúde (UBS)", "materias": ["Saúde"]},
-    {"id": "caps", "nome": "Centros de Atenção Psicossocial (CAPS)", "materias": ["Saúde"]},
-    {"id": "prisionais", "nome": "Unidades prisionais", "materias": ["Execução penal"]},
+    {"id": "escolas", "nome": "Escolas", "materias": ["Educação", "Infância e juventude", "Cidadania"]},
+    {"id": "hospitais", "nome": "Hospitais e unidades de pronto atendimento", "materias": ["Saúde", "Cidadania"]},
+    {"id": "ubs", "nome": "Unidades Básicas de Saúde (UBS)", "materias": ["Saúde", "Cidadania"]},
+    {"id": "caps", "nome": "Centros de Atenção Psicossocial (CAPS)", "materias": ["Saúde", "Cidadania"]},
+    {"id": "cras", "nome": "Centros de Referência de Assistência Social (CRAS)",
+     "materias": ["Cidadania", "Infância e juventude", "Idoso e pessoa com deficiência"]},
+    {"id": "creas", "nome": "Centros de Referência Especializados de Assistência Social (CREAS)",
+     "materias": ["Cidadania", "Infância e juventude", "Idoso e pessoa com deficiência", "Violência doméstica"]},
+    {"id": "pop", "nome": "Centros POP (população em situação de rua)", "materias": ["Cidadania"]},
+    {"id": "prisionais", "nome": "Unidades prisionais",
+     "materias": ["Execução penal", "Criminal", "Controle externo da atividade policial"]},
     {"id": "acolhimento", "nome": "Acolhimento de crianças e adolescentes", "materias": ["Infância e juventude"]},
-    {"id": "idosos", "nome": "Acolhimento de idosos e de pessoas com deficiência",
-     "materias": ["Idoso e pessoa com deficiência"]},
-    {"id": "mulheres", "nome": "Acolhimento de mulheres em situação de violência", "materias": ["Violência doméstica"]},
+    {"id": "idosos", "nome": "Acolhimento de idosos (ILPI) e de pessoas com deficiência",
+     "materias": ["Idoso e pessoa com deficiência", "Cidadania"]},
+    {"id": "centrodia", "nome": "Centros-dia (idosos e pessoas com deficiência)",
+     "materias": ["Idoso e pessoa com deficiência", "Cidadania"]},
+    {"id": "mulheres", "nome": "Acolhimento de mulheres em situação de violência",
+     "materias": ["Violência doméstica", "Cidadania"]},
 ]
 
 # Tipos de unidade do CNES
@@ -76,7 +99,7 @@ _SIGLAS = {"UBS", "CAPS", "PSF", "ESF", "UPA", "CMEI", "CEI", "CEPI", "APAE", "A
 def _nome(texto):
     """"ESCOLA MUNICIPAL SAO JOSE" → "Escola Municipal Sao Jose" (siglas continuam em maiúsculas)."""
     texto = re.sub(r"\s+", " ", texto or "").strip()
-    if texto != texto.upper():  # já vem com maiúsculas e minúsculas
+    if texto not in (texto.upper(), texto.lower()):  # já vem com maiúsculas e minúsculas
         return texto
     saida = []
     for i, p in enumerate(texto.split(" ")):
@@ -207,34 +230,101 @@ def _prisionais(pasta, municipios):
     return saida
 
 
-def _acolhimento(pasta, municipios):
-    caminho = _baixar(CENSO_SUAS, pasta / "suas.csv")
+def _endereco(linha, coluna_telefone):
+    """(endereço, telefone) de uma unidade do Censo SUAS."""
+    tipo = linha.get("q0_2", "").strip()
+    tipo = "" if tipo.isdigit() else tipo  # no CREAS o tipo de logradouro vem como código
+    rua = _nome(linha.get("q0_3", ""))
+    if rua and tipo and not rua.lower().startswith(tipo.lower()):
+        rua = f"{tipo} {rua}"
+    numero = linha.get("q0_4", "").strip()
+    numero = "s/n" if numero.lower() in {"", "0", "sn", "s/n"} else numero
+    bairro = _nome(linha.get("q0_6", ""))
+    endereco = ", ".join(p for p in [rua, numero if rua else "", bairro] if p)
+    telefone = re.sub(r"\s+", " ", linha.get(coluna_telefone, "")).strip()
+    return endereco, telefone if re.search(r"\d{4}", telefone) else ""
+
+
+# Nomes que não identificam a unidade ("Unidade de Acolhimento", "CREAS")
+_GENERICO = re.compile(r"^(unidade de acolhimento|creas|cras|centro pop|creas pop|centro-dia e similares)$", re.I)
+_PREFIXO = re.compile(r"^(unidade de acolhimento|centro-dia e similares)\s*[-–:]?\s*(?=\S)", re.I)
+
+
+def _suas_linhas(pasta, arquivo):
+    caminho = _baixar(CENSO_SUAS + arquivo, pasta / arquivo.rsplit("/", 1)[-1])
+    return csv.DictReader(io.StringIO(caminho.read_text(encoding="cp1252")), delimiter=";")
+
+
+def _assistencia(pasta, municipios):
+    """{nome do município: {tipo: [unidades]}} do Censo SUAS: CRAS, CREAS, Centro POP, acolhimento
+    (por público atendido), centro-dia e família acolhedora."""
     por_codigo6 = {codigo[:6]: nome for codigo, nome in municipios.items()}
     saida = {}
-    for linha in csv.DictReader(io.StringIO(caminho.read_text(encoding="cp1252")), delimiter=";"):
-        municipio = por_codigo6.get(linha["IBGE"][:6])
-        if not municipio:
-            continue
-        publico = linha["q1_1"].strip()
-        grupo = next((g for padrao, g in PUBLICO_SUAS if padrao.search(publico)), None)
-        if not grupo:
-            continue
-        natureza = {"1": "Governamental", "0": "Não governamental"}.get(linha.get("q3", "").strip(), "")
-        detalhe = [linha["q1_2"].strip(), publico if grupo == "idosos" else "", natureza]
-        # "Unidade de Acolhimento - Asilo São Vicente" → "Asilo São Vicente"
-        nome = re.sub(r"^unidade de acolhimento\s*[-–:]?\s*(?=\S)", "", _nome(linha["q0_1"]), flags=re.I) or _nome(linha["q0_1"])
-        saida.setdefault(municipio, {}).setdefault(grupo, []).append(
-            {"nome": nome[:1].upper() + nome[1:], "detalhe": " · ".join(d for d in detalhe if d), "ordem": 0})
+    for arquivo_id, (arquivo, coluna_telefone) in SUAS_ARQUIVOS.items():
+        quantos = 0
+        for linha in _suas_linhas(pasta, arquivo):
+            municipio = por_codigo6.get(linha["IBGE"][:6])
+            if not municipio:
+                continue
+            nome_bruto = _nome(linha["q0_1"])
+            nome = _PREFIXO.sub("", nome_bruto) or nome_bruto
+            detalhe = []
+            grupo = arquivo_id
+            if arquivo_id == "acolhimento":
+                publico = linha["q1_1"].strip()
+                grupo = next((g for padrao, g in PUBLICO_SUAS if padrao.search(publico)), None)
+                if not grupo:
+                    continue
+                modalidade = linha["q1_2"].strip()
+                natureza = linha.get("q3", "").strip()
+                natureza = "Não governamental" if natureza.lower().startswith("n") else "Governamental" if natureza else ""
+                if _GENERICO.match(nome):  # o Censo traz só "Unidade de Acolhimento": vale o tipo de serviço
+                    ilpi = re.search(r"\((Institui[^)]*?)(?: - ILPI)?\)", modalidade)
+                    nome = (f"{ilpi.group(1)} (ILPI)" if ilpi
+                            else f"{re.sub(r' *[(].*', '', modalidade)} ({publico.lower().replace(' / ', ' e ')})")
+                    modalidade = "" if ilpi else modalidade
+                detalhe = [modalidade if modalidade and modalidade[:12] not in nome else "",
+                           publico if grupo == "idosos" else "", natureza]
+            elif arquivo_id == "familia":
+                grupo = "acolhimento"
+                if _GENERICO.match(nome):
+                    nome = "Serviço de Família Acolhedora"
+                detalhe = ["Família acolhedora", linha.get("q1", "").strip()]
+            else:
+                if arquivo_id == "cras":
+                    detalhe = [linha.get("q1", "").strip()]  # "3.500 famílias referenciadas"
+                if _GENERICO.match(nome):
+                    nome = f"{nome.upper() if ' ' not in nome else nome} de {municipio}"
+            endereco, telefone = _endereco(linha, coluna_telefone)
+            saida.setdefault(municipio, {}).setdefault(grupo, []).append({
+                "nome": nome[:1].upper() + nome[1:], "detalhe": " · ".join(d for d in detalhe if d),
+                "endereco": endereco, "telefone": telefone, "ordem": 0})
+            quantos += 1
+        print(f"[instituicoes] Censo SUAS {arquivo_id}: {quantos}")
     return saida
 
 
-def atualizar(zip_censo=None):
+def _municipios():
+    """{código IBGE de 7 dígitos: nome} dos municípios de Goiás."""
+    resp = requests.get(IBGE_MUNICIPIOS, timeout=60)
+    resp.raise_for_status()
+    return {str(m["id"]): m["nome"] for m in resp.json()}
+
+
+def atualizar(zip_censo=None, manter_escolas=False):
+    anterior = carregar()
     with tempfile.TemporaryDirectory() as temp:
         pasta = Path(temp)
-        municipios, ano_escolar, escolas = _escolas(pasta, zip_censo)
+        municipios = _municipios()
+        if manter_escolas:
+            escolas = {m: g.get("escolas", []) for m, g in anterior["municipios"].items()}
+            fonte_escolas = anterior["fontes"]["escolas"]
+        else:
+            _, ano_escolar, escolas = _escolas(pasta, zip_censo)
+            fonte_escolas = f"Censo Escolar {ano_escolar} (INEP)"
         saude = _cnes(municipios)
         prisionais = _prisionais(pasta, municipios)
-        acolhimento = _acolhimento(pasta, municipios)
+        acolhimento = _assistencia(pasta, municipios)
 
     por_municipio = {}
     for nome in sorted(set(municipios.values())):
@@ -243,16 +333,17 @@ def atualizar(zip_censo=None):
         limpo = {}
         for grupo, itens in grupos.items():
             if itens:
-                itens.sort(key=lambda i: (i["ordem"], i["nome"]))
-                limpo[grupo] = [{"nome": i["nome"], "detalhe": i["detalhe"]} for i in itens]
+                if all("ordem" in i for i in itens):  # as escolas reaproveitadas já vêm em ordem
+                    itens.sort(key=lambda i: (i["ordem"], i["nome"]))
+                limpo[grupo] = [{k: v for k, v in i.items() if k != "ordem" and v} for i in itens]
         por_municipio[nome] = limpo
     dados = {
         "atualizado": date.today().isoformat(),
         "fontes": {
-            "escolas": f"Censo Escolar {ano_escolar} (INEP)",
+            "escolas": fonte_escolas,
             "saude": "CNES (Ministério da Saúde)",
             "prisionais": "SISDEPEN, 2º semestre de 2025 (Senappen)",
-            "acolhimento": "Censo SUAS 2024 (MDS)",
+            "assistencia": "Censo SUAS 2024 (MDS)",
         },
         "municipios": por_municipio,
     }
@@ -288,7 +379,7 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     if "--atualizar" in sys.argv:
         censo = sys.argv[sys.argv.index("--censo") + 1] if "--censo" in sys.argv else None
-        atualizar(censo)
+        atualizar(censo, "--manter-escolas" in sys.argv)
     else:
         for cidade in sys.argv[1:] or ["Ceres"]:
             for grupo, itens in das_cidades([cidade])["municipios"][cidade].items():

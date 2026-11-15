@@ -53,7 +53,7 @@ MATERIAS = [
     ("Tribunal do Júri", re.compile(r"\bj[úu]ri\b|\bjurados?\b|pron[úu]ncia", re.I)),
     ("Execução penal", re.compile(r"execu[çc][ãa]o penal|execu[çc][õo]es penais|indulto|livramento condicional|"
                                   r"progress[ãa]o de regime", re.I)),
-    ("Violência doméstica", re.compile(r"viol[êe]ncia dom[ée]stica|Maria da Penha|feminic|contra a mulher", re.I)),
+    ("Violência doméstica", re.compile(r"viol[êe]ncia dom[ée]stica|Maria da Penha|feminic|contra (a )?mulher", re.I)),
     ("Infância e juventude", re.compile(r"inf[âa]ncia|juventude|crian[çc]as?|adolescentes?|ato infracional|\bECA\b", re.I)),
     ("Família e sucessões", re.compile(r"fam[íi]lia|sucess[õo]es|\balimentos\b|div[óo]rcio|uni[ãa]o est[áa]vel|"
                                        r"casamento|curatela|interdi[çc]", re.I)),
