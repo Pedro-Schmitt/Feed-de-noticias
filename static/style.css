@@ -807,7 +807,7 @@ footer { padding-bottom: 24px; }
 .titulo-comarca:first-child { margin-top: 0; }
 
 /* --- Instituições que merecem acompanhamento --- */
-.instituicoes { grid-column: 1 / -1; }
+.instituicoes, .retrato { grid-column: 1 / -1; }
 .instituicoes-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-items: start; }
 .instituicoes-grupo { border: 1px solid var(--borda); border-radius: 12px; padding: 0 14px; }
 .instituicoes-grupo summary {
@@ -917,3 +917,30 @@ footer { padding-bottom: 24px; }
 }
 .instituicao-contato a { color: var(--cor); font-weight: 600; width: fit-content; }
 .instituicao-contato a:hover { text-decoration: underline; }
+
+/* --- Retrato da comarca: violência, lotação, IDEB e saúde --- */
+.retrato-bloco { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--borda); }
+.retrato-bloco:first-of-type { border-top: 0; padding-top: 0; }
+.retrato-bloco > h3 { margin: 0 0 4px; font-size: 1.1rem; }
+.retrato-bloco > .nota { margin: 0 0 10px; }
+.retrato-grafico { width: 100%; margin: 8px 0; }
+.retrato-cartoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.retrato-cartao {
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--borda); background: color-mix(in srgb, var(--cor) 5%, transparent);
+}
+.retrato-cartao strong { font-size: 1.5rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.retrato-cartao-rotulo { font-size: 0.78rem; font-weight: 600; color: var(--suave); text-transform: uppercase; letter-spacing: 0.03em; }
+.retrato-cartao-sub { font-size: 0.8rem; color: var(--suave); }
+.retrato-cartao.piora strong, .retrato-tabela td.piora { color: var(--baixa); }
+.retrato-cartao.melhora strong, .retrato-tabela td.melhora { color: var(--alta); }
+.retrato-tabela-rolagem { overflow-x: auto; margin: 8px 0; }
+.retrato-tabela { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.retrato-tabela th, .retrato-tabela td { padding: 6px 8px; border-bottom: 1px solid var(--borda); text-align: right; white-space: nowrap; }
+.retrato-tabela th:first-child, .retrato-tabela td:first-child { text-align: left; white-space: normal; }
+.retrato-tabela th { font-size: 0.75rem; color: var(--suave); font-weight: 600; vertical-align: bottom; white-space: normal; }
+.retrato-tabela td small { color: var(--suave); font-size: 0.72rem; }
+.retrato-tabela tr.retrato-referencia td { font-weight: 600; background: color-mix(in srgb, var(--texto) 4%, transparent); }
+@media (max-width: 640px) {
+  .retrato-cartoes { grid-template-columns: 1fr; }
+}

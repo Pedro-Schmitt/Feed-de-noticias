@@ -6,17 +6,20 @@ As bases são oficiais e públicas, mas grandes e atualizadas uma ou duas vezes 
 ficam numa cópia em dados/instituicoes.json, só com os municípios de Goiás. Para atualizar:
 
     python instituicoes.py --atualizar [--censo microdados_censo_escolar_AAAA.zip | --manter-escolas]
+                                       [--ideb pasta com os divulgacao_*_escolas_AAAA.zip]
 
 (o servidor do INEP às vezes manda a cadeia de certificados incompleta e o Python recusa a
 conexão; nesse caso, baixe o .zip pelo navegador ou pelo curl e passe o caminho em --censo, ou
 use --manter-escolas para atualizar o resto e reaproveitar as escolas da cópia atual)
 
 Fontes:
-- Escolas: Censo Escolar do INEP (microdados da educação básica), escolas em atividade.
+- Escolas: Censo Escolar do INEP (microdados da educação básica), escolas em atividade, com o
+  IDEB de cada escola (resultados do INEP por escola: anos iniciais, anos finais e ensino médio).
 - Hospitais, prontos-socorros, UBS e CAPS: CNES, pela API de dados abertos do Ministério da Saúde.
-- Unidades prisionais: SISDEPEN (Senappen), estabelecimentos com cela física.
+- Unidades prisionais: SISDEPEN (Senappen), estabelecimentos com cela física, com vagas e presos.
 - Assistência social (CRAS, CREAS, Centro POP, centro-dia, acolhimento e família acolhedora):
-  Censo SUAS (MDS), com endereço e telefone informados pelas próprias unidades.
+  Censo SUAS (MDS), com endereço e telefone informados pelas próprias unidades e, no acolhimento,
+  a capacidade e o número de acolhidos.
 """
 
 import csv
@@ -31,10 +34,14 @@ from pathlib import Path
 
 import requests
 
+import xlsx_simples
+
 ARQUIVO = Path(__file__).parent / "dados" / "instituicoes.json"
 UF, CODIGO_UF = "GO", "52"
 
 CENSO_ESCOLAR = "https://download.inep.gov.br/dados_abertos/microdados_censo_escolar_{ano}.zip"
+IDEB = "https://download.inep.gov.br/ideb/resultados/divulgacao_{etapa}_escolas_{ano}.zip"
+ETAPAS_IDEB = {"anos_iniciais": "Anos iniciais", "anos_finais": "Anos finais", "ensino_medio": "Ensino médio"}
 CNES = "https://apidadosabertos.saude.gov.br/cnes/estabelecimentos"
 SISDEPEN = ("https://www.gov.br/senappen/pt-br/servicos/sisdepen/bases-de-dados/2025/"
             "19o-ciclo-base-de-dados-2025-2-semestre.csv/@@download/file")
@@ -190,12 +197,68 @@ def _escolas(pasta, zip_local=None):
                            "zona rural" if linha["TP_LOCALIZACAO"] == "2" else ""]
                 escolas.setdefault(linha["NO_MUNICIPIO"], []).append({
                     "nome": _nome(linha["NO_ENTIDADE"]), "detalhe": " · ".join(d for d in detalhe if d),
+                    "inep": linha["CO_ENTIDADE"],
                     "grupo": GRUPOS_ESCOLA.get(dependencia, "Outras"),
                     "endereco": _montar_endereco(linha.get("DS_ENDERECO"), linha.get("NU_ENDERECO"),
                                                  linha.get("DS_COMPLEMENTO"), linha.get("NO_BAIRRO"), linha.get("CO_CEP")),
                     "telefone": _telefone(linha.get("NU_DDD"), linha.get("NU_TELEFONE")),
                     "ordem": (list(GRUPOS_ESCOLA).index(dependencia) if dependencia in GRUPOS_ESCOLA else 9, 0)})
     return municipios, ano, escolas
+
+
+def _ideb(pasta, pasta_local=None):
+    """IDEB de cada escola de Goiás: ({código INEP: [{etapa, valor, ano, anterior}]}, ano,
+    {etapa: mediana das escolas públicas de Goiás}). O IDEB sai a cada dois anos (anos ímpares)."""
+    por_escola, medianas, ano_ideb = {}, {}, None
+    hoje = date.today().year
+    for etapa, rotulo in ETAPAS_IDEB.items():
+        caminho = None
+        for ano in range(hoje - (hoje % 2 == 0), hoje - 6, -2):
+            local = Path(pasta_local) / f"divulgacao_{etapa}_escolas_{ano}.zip" if pasta_local else None
+            if local and local.exists():
+                caminho = local
+                break
+            try:
+                caminho = _baixar(IDEB.format(etapa=etapa, ano=ano), pasta / f"ideb_{etapa}.zip", timeout=1200)
+                break
+            except requests.RequestException as erro:  # o ano que ainda não saiu dá 404
+                print(f"[instituicoes] IDEB {etapa} {ano} indisponível: {type(erro).__name__}")
+        if not caminho:
+            continue
+        with zipfile.ZipFile(caminho) as z:
+            nome = next(n for n in z.namelist() if n.endswith(".xlsx"))
+            planilha = pasta / f"ideb_{etapa}.xlsx"
+            planilha.write_bytes(z.read(nome))
+        colunas, anos, valores_go = None, [], []
+        for linha in xlsx_simples.linhas(planilha):
+            if linha and linha[0] == "SG_UF":
+                colunas = {c: i for i, c in enumerate(linha) if c}
+                anos = sorted(int(c[-4:]) for c in colunas if re.fullmatch(r"VL_OBSERVADO_\d{4}", c))
+                continue
+            if not colunas or not linha or linha[0] != UF:
+                continue
+            serie = {}
+            for a in anos:
+                i = colunas[f"VL_OBSERVADO_{a}"]
+                if i < len(linha) and isinstance(linha[i], float):
+                    serie[a] = linha[i]
+            if not serie:
+                continue
+            ultimo = max(serie)
+            if ultimo < anos[-1] - 4:  # nota antiga: a escola não oferece mais a etapa ou não fez as provas
+                continue
+            item = {"etapa": rotulo, "valor": round(serie[ultimo], 1), "ano": ultimo}
+            if ultimo - 2 in serie:
+                item["anterior"] = round(serie[ultimo - 2], 1)
+            por_escola.setdefault(str(int(linha[colunas["ID_ESCOLA"]])), []).append(item)
+            if ultimo == anos[-1] and linha[colunas["REDE"]] != "Privada":
+                valores_go.append(serie[ultimo])
+        if valores_go:
+            valores_go.sort()
+            medianas[rotulo] = round(valores_go[len(valores_go) // 2], 1)
+            ano_ideb = max(ano_ideb or 0, anos[-1])
+        print(f"[instituicoes] IDEB {rotulo}: {len(valores_go)} escolas públicas de Goiás com nota")
+    return por_escola, ano_ideb, medianas
 
 
 def _cnes(municipios):
@@ -271,6 +334,7 @@ def _prisionais(pasta, municipios):
             "detalhe": " · ".join(d for d in detalhe if d),
             "endereco": _montar_endereco(campo("Endereço"), None, "", campo("Bairro"), campo("CEP")),
             "telefone": _telefone("", campo("Telefone Principal")),
+            "lotacao": {"vagas": vagas, "ocupados": presos} if vagas else None,
             "ordem": (-presos, 0)})
     return saida
 
@@ -309,6 +373,7 @@ def _assistencia(pasta, municipios):
             if not municipio:
                 continue
             nome_bruto = _nome(linha["q0_1"])
+            lotacao = None
             nome = _PREFIXO.sub("", nome_bruto) or nome_bruto
             detalhe = []
             grupo = arquivo_id
@@ -327,6 +392,10 @@ def _assistencia(pasta, municipios):
                     modalidade = "" if ilpi else modalidade
                 detalhe = [modalidade if modalidade and modalidade[:12] not in nome else "",
                            publico if grupo == "idosos" else "", natureza]
+                vagas, acolhidos = _numero(linha.get("q10")), _numero(linha.get("q11"))
+                if vagas:  # capacidade e acolhidos na semana do questionário
+                    lotacao = {"vagas": vagas, "ocupados": acolhidos}
+                    detalhe.append(f"{vagas} vagas · {acolhidos} acolhidos")
             elif arquivo_id == "familia":
                 grupo = "acolhimento"
                 if _GENERICO.match(nome):
@@ -340,7 +409,7 @@ def _assistencia(pasta, municipios):
             endereco, telefone = _endereco(linha, coluna_telefone)
             saida.setdefault(municipio, {}).setdefault(grupo, []).append({
                 "nome": nome[:1].upper() + nome[1:], "detalhe": " · ".join(d for d in detalhe if d),
-                "endereco": endereco, "telefone": telefone, "ordem": (0, 0)})
+                "endereco": endereco, "telefone": telefone, "lotacao": lotacao, "ordem": (0, 0)})
             quantos += 1
         print(f"[instituicoes] Censo SUAS {arquivo_id}: {quantos}")
     return saida
@@ -353,7 +422,7 @@ def _municipios():
     return {str(m["id"]): m["nome"] for m in resp.json()}
 
 
-def atualizar(zip_censo=None, manter_escolas=False):
+def atualizar(zip_censo=None, manter_escolas=False, pasta_ideb=None):
     anterior = carregar()
     with tempfile.TemporaryDirectory() as temp:
         pasta = Path(temp)
@@ -369,6 +438,14 @@ def atualizar(zip_censo=None, manter_escolas=False):
         else:
             _, ano_escolar, escolas = _escolas(pasta, zip_censo)
             fonte_escolas = f"Censo Escolar {ano_escolar} (INEP)"
+        # O IDEB liga pelo código INEP (as escolas reaproveitadas da cópia já o trazem, se houver)
+        ideb, ano_ideb, medianas_ideb = _ideb(pasta, pasta_ideb)
+        for lista in escolas.values():
+            for e in lista:
+                if e.get("inep") in ideb:
+                    e["ideb"] = ideb[e["inep"]]
+        if ano_ideb:
+            fonte_escolas = re.sub(r"; IDEB .*", "", fonte_escolas) + f"; IDEB {ano_ideb} (INEP)"
         saude = _cnes(municipios)
         prisionais = _prisionais(pasta, municipios)
         acolhimento = _assistencia(pasta, municipios)
@@ -391,6 +468,7 @@ def atualizar(zip_censo=None, manter_escolas=False):
             "prisionais": "SISDEPEN, 2º semestre de 2025 (Senappen)",
             "assistencia": "Censo SUAS 2024 (MDS)",
         },
+        "ideb_goias": medianas_ideb,
         "municipios": por_municipio,
     }
     ARQUIVO.write_text(json.dumps(dados, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -417,6 +495,7 @@ def das_cidades(cidades):
     return {
         "tipos": TIPOS,
         "fontes": dados.get("fontes", {}),
+        "ideb_goias": dados.get("ideb_goias", {}),
         "municipios": {c: dados["municipios"].get(c, {}) for c in cidades},
     }
 
@@ -425,7 +504,8 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     if "--atualizar" in sys.argv:
         censo = sys.argv[sys.argv.index("--censo") + 1] if "--censo" in sys.argv else None
-        atualizar(censo, "--manter-escolas" in sys.argv)
+        ideb = sys.argv[sys.argv.index("--ideb") + 1] if "--ideb" in sys.argv else None
+        atualizar(censo, "--manter-escolas" in sys.argv, ideb)
     else:
         for cidade in sys.argv[1:] or ["Ceres"]:
             for grupo, itens in das_cidades([cidade])["municipios"][cidade].items():

@@ -21,6 +21,7 @@ from pathlib import Path
 import requests
 
 import coletor
+import indicadores
 import informativos
 import instituicoes
 import radar
@@ -420,7 +421,8 @@ def arquivo_do_local(local, dados, agendas):
         dados = dados and {**dados, "noticias": [{**n, "materias": _materias_radar(n)} for n in dados["noticias"]]}
         # As instituições da comarca valem mesmo antes da primeira coleta das notícias
         dados = {"nome": local["nome"], "tipo": "cidade", "noticias": None, **(dados or {}),
-                 "municipios": local["municipios"], "instituicoes": instituicoes.das_cidades(local["municipios"])}
+                 "municipios": local["municipios"], "instituicoes": instituicoes.das_cidades(local["municipios"]),
+                 "indicadores": indicadores.das_cidades(local["municipios"])}
     if local["tipo"] == "camara":
         dados = {"nome": local["nome"], "tipo": "camara", "municipios": local["municipios"],
                  **(dados or {"noticias": None}),
