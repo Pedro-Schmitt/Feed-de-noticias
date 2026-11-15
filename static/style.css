@@ -944,3 +944,32 @@ footer { padding-bottom: 24px; }
 @media (max-width: 640px) {
   .retrato-cartoes { grid-template-columns: 1fr; }
 }
+
+/* --- Resumo geral: o essencial de cada aba --- */
+.resumo-grade { align-items: start; }
+.resumo-quadro { display: flex; flex-direction: column; }
+.resumo-corpo { flex: 1; }
+.resumo-subtitulo { margin: 12px 0 6px; font-size: 0.95rem; }
+.resumo-lista { list-style: none; margin: 0; padding: 0; }
+.resumo-lista li { padding: 10px 0; border-bottom: 1px solid var(--borda); }
+.resumo-lista li:last-child { border-bottom: 0; }
+.resumo-lista li.destacado { padding-left: 10px; border-left: 3px solid var(--cor); }
+.resumo-etiquetas { margin: 0 0 4px; }
+.resumo-titulo { display: block; font-weight: 600; font-size: 0.92rem; line-height: 1.4; color: var(--texto); }
+a.resumo-titulo:hover { text-decoration: underline; }
+.resumo-detalhe {
+  margin: 3px 0 0; font-size: 0.8rem; color: var(--suave); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.resumo-numeros { list-style: none; margin: 4px 0 8px; padding: 0; font-size: 0.86rem; line-height: 1.45; }
+.resumo-numeros li { padding: 6px 0 6px 12px; border-left: 3px solid color-mix(in srgb, var(--cor) 45%, transparent); margin-bottom: 6px; }
+.resumo-numeros a { color: var(--texto); text-decoration: underline; }
+.resumo-numeros .piora { color: var(--baixa); }
+.resumo-numeros .melhora { color: var(--alta); }
+.resumo-grade .nota { margin-top: 6px; font-size: 0.8rem; }
+.resumo-ir {
+  align-self: flex-start; margin-top: 12px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--cor) 50%, transparent); background: transparent;
+  color: var(--cor); font: inherit; font-size: 0.82rem; font-weight: 600;
+}
+.resumo-ir:hover { background: color-mix(in srgb, var(--cor) 10%, transparent); }

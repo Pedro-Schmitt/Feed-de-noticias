@@ -58,13 +58,26 @@
     </section>
 
     <nav id="abas" class="abas" role="tablist" aria-label="Partes da revista">
+      <button type="button" role="tab" data-alvo="resumo">Resumo geral</button>
       <button type="button" role="tab" data-alvo="brasil">Brasil e Mundo</button>
       <button type="button" role="tab" data-alvo="regiao">Sua região</button>
       <button type="button" role="tab" data-alvo="mpgo">MPGO</button>
       <button type="button" role="tab" data-alvo="jurisprudencia">Jurisprudência relativa à sua atuação</button>
     </nav>
 
-    <div id="aba-brasil" class="aba" data-aba="brasil" role="tabpanel">
+    <div id="aba-resumo" class="aba" data-aba="resumo" role="tabpanel">
+    <section class="area" id="area-resumo" style="--cor-area: #e8590c">
+      <header class="area-cabecalho">
+        <div>
+          <h2>Resumo geral</h2>
+          <p id="nota-resumo" class="nota">Um compilado de todo o conteúdo relevante para quem só tem 5 minutos</p>
+        </div>
+      </header>
+      <div id="resumo" class="secoes resumo-grade"></div>
+    </section>
+    </div>
+
+    <div id="aba-brasil" class="aba" data-aba="brasil" role="tabpanel" hidden>
     <section class="area" id="area-gerais" style="--cor-area: #2f6fdb">
       <header class="area-cabecalho">
         <div>

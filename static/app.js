@@ -458,6 +458,7 @@ function montarInformativos() {
     container.append(painel);
   }
   montarNormas();
+  montarResumo();
 }
 
 /** Data ISO (aaaa-mm-dd) como dd/mm/aaaa. */
@@ -637,6 +638,8 @@ async function mostrarRegioes() {
   if (!promotoriasAtuais.length) {
     nota.textContent = "Escolha a sua Promotoria de Justiça no início da página para ver as notícias da sua cidade e da sua região.";
     container.replaceChildren();
+    regioesResumo = [];
+    montarResumo();
     return;
   }
   // Cada comarca uma vez só, na ordem em que as promotorias foram escolhidas
@@ -650,6 +653,8 @@ async function mostrarRegioes() {
     return { nome, comarca, cidade, regiao, camara };
   }));
   if (geracao !== geracaoRegiao) return; // a escolha mudou enquanto carregava
+  regioesResumo = grupos;
+  montarResumo();
 
   container.replaceChildren();
   const regioesMostradas = new Set();
@@ -764,7 +769,8 @@ function itemInstituicao(i, municipio) {
 }
 
 /** Um tipo de instituição (escolas, saúde, CRAS...) de uma cidade, como lista que abre e fecha.
- * Escolas e unidades de saúde vêm divididas em grupos (natureza da escola, tipo da unidade). */
+ * As unidades de saúde vêm divididas em grupos (tipo da unidade); as escolas só vêm na ordem
+ * federais, estaduais, municipais e privadas, sem títulos de grupo. */
 function grupoInstituicoes(tipo, itens, municipio, perfil) {
   const grupo = elemento("details", "instituicoes-grupo");
   const resumo = elemento("summary");
@@ -779,7 +785,7 @@ function grupoInstituicoes(tipo, itens, municipio, perfil) {
   const ul = elemento("ul", "instituicoes-lista lista-rolagem");
   let atual = null;
   for (const i of itens) {
-    if (i.grupo && i.grupo !== atual) {
+    if (i.grupo && i.grupo !== atual && tipo.id !== "escolas") {
       atual = i.grupo;
       const quantas = itens.filter((x) => x.grupo === atual).length;
       ul.append(elemento("li", "instituicoes-subgrupo", `${atual} (${quantas})`));
@@ -1692,6 +1698,7 @@ async function carregarAgendas() {
     return;
   }
   preencherAgendas();
+  montarResumo();
   nota.textContent = `Compromissos do dia, direto das fontes oficiais · atualizado ${tempoRelativo(agendas.atualizado)}`;
 }
 
@@ -1950,9 +1957,287 @@ async function carregarCotacoes() {
   } catch { /* fica com a variação diária */ }
 }
 
-// --- Abas: Brasil e Mundo, Sua região, MPGO e Jurisprudência ---
+// --- Resumo geral: o essencial de todas as abas, para quem só tem 5 minutos ---
 
-const ABAS = ["brasil", "regiao", "mpgo", "jurisprudencia"];
+let regioesResumo = []; // comarcas já carregadas em "Sua região" (cidade com radar, indicadores e instituições)
+const DIAS_NORMAS_RESUMO = 15;
+const ORDEM_MARCAS = ["mudanca", "repetitivo", "importante"];
+
+/** Texto encurtado no fim da palavra. */
+function encurtar(texto, max) {
+  if (!texto || texto.length <= max) return texto || "";
+  return texto.slice(0, texto.lastIndexOf(" ", max - 1) > max * 0.6 ? texto.lastIndexOf(" ", max - 1) : max - 1) + "…";
+}
+
+/** Quadro do resumo: título, conteúdo e o botão que leva à aba com tudo. */
+function quadroResumo(titulo, cor, aba, rotuloAba) {
+  const painel = elemento("section", "painel secao resumo-quadro");
+  painel.style.setProperty("--cor", cor);
+  painel.append(elemento("h2", "", titulo));
+  const corpo = elemento("div", "resumo-corpo");
+  painel.append(corpo);
+  if (aba) {
+    const ir = elemento("button", "resumo-ir", `${rotuloAba} →`);
+    ir.type = "button";
+    ir.addEventListener("click", () => mostrarAba(aba, true));
+    painel.append(ir);
+  }
+  return { painel, corpo };
+}
+
+/** Item de lista do resumo: etiquetas, título (com link) e uma linha de detalhe. */
+function itemResumo({ etiquetas = [], titulo, href, detalhe, destaque = false }) {
+  const li = elemento("li", destaque ? "destacado" : "");
+  if (etiquetas.length) {
+    const p = elemento("p", "resumo-etiquetas");
+    for (const [texto, classe] of etiquetas) p.append(elemento("span", `etiqueta ${classe || ""}`, texto), " ");
+    li.append(p);
+  }
+  const tituloEl = href ? linkExterno(href, titulo) : elemento("span", "", titulo);
+  tituloEl.classList.add("resumo-titulo");
+  li.append(tituloEl);
+  if (detalhe) li.append(elemento("p", "resumo-detalhe", detalhe));
+  return li;
+}
+
+function listaResumo(itens, vazio) {
+  if (!itens.length) return elemento("p", "vazio", vazio);
+  const ul = elemento("ul", "resumo-lista");
+  itens.forEach((i) => ul.append(itemResumo(i)));
+  return ul;
+}
+
+/** A principal notícia de cada editoria (a noticiada por mais veículos vem primeiro). */
+function resumoManchetes() {
+  const { painel, corpo } = quadroResumo("Manchetes do dia", "#2f6fdb", "brasil", "Todas as notícias");
+  if (!noticias) {
+    corpo.append(elemento("p", "vazio", "Carregando as notícias…"));
+    return painel;
+  }
+  const itens = noticias.secoes.filter((s) => s.noticias.length).map((s) => {
+    const n = s.noticias[0];
+    return {
+      etiquetas: [[s.nome]],
+      titulo: n.titulo, href: n.link,
+      detalhe: [n.fonte, tempoRelativo(n.data), n.veiculos > 1 ? `em ${n.veiculos} veículos` : ""].filter(Boolean).join(" · "),
+    };
+  });
+  corpo.append(listaResumo(itens, "Nenhuma notícia agora."));
+  return painel;
+}
+
+/** Comarca: os fatos do radar, a tendência das mortes violentas e a superlotação. */
+function resumoRegiao() {
+  const { painel, corpo } = quadroResumo("Na sua comarca", "#0f9d58", "regiao", "Tudo da sua região");
+  if (!promotoriasAtuais.length) {
+    corpo.append(elemento("p", "vazio", "Escolha a sua Promotoria de Justiça no início da página para ver os fatos da sua comarca."));
+    return painel;
+  }
+  if (!regioesResumo.length) {
+    corpo.append(elemento("p", "vazio", "Carregando a sua região…"));
+    return painel;
+  }
+  for (const { nome, cidade } of regioesResumo) {
+    if (regioesResumo.length > 1) corpo.append(elemento("h3", "resumo-subtitulo", `Comarca de ${nome}`));
+    const perfil = perfilPromotorias(promotoriasAtuais.filter((p) => p.comarca === nome));
+    const minhas = new Set(perfil.materias);
+    // Radar: os fatos mais recentes ligados às atribuições
+    const fatos = (cidade?.noticias || [])
+      .map((n) => ({ ...n, pertinentes: (n.materias || []).filter((m) => minhas.has(m)) }))
+      .filter((n) => n.pertinentes.length)
+      .slice(0, 3)
+      .map((n) => ({
+        etiquetas: n.pertinentes.map((m) => [m]),
+        titulo: n.radar?.resumo || n.titulo, href: n.link,
+        detalhe: n.radar?.motivo ? `${encurtar(n.radar.motivo, 160)} · ${tempoRelativo(n.data)}` : `${n.fonte} · ${tempoRelativo(n.data)}`,
+      }));
+    corpo.append(listaResumo(fatos, cidade?.noticias ? "Nenhum fato ligado às suas atribuições nos últimos 10 dias." : "As notícias da comarca ainda estão sendo coletadas."));
+
+    // Números: mortes violentas em 12 meses e unidades superlotadas
+    const numeros = elemento("ul", "resumo-numeros");
+    const ind = cidade?.indicadores;
+    if (ind?.meses?.length) {
+      const municipios = Object.values(ind.municipios);
+      const cvli = ind.meses.map((_, i) => somar(municipios.flatMap((m) => CVLI.map((e) => m.violencia[e]?.[i]))));
+      const cvliGo = ind.meses.map((_, i) => somar(CVLI.map((e) => ind.goias.violencia[e]?.[i])));
+      const doze = somar(cvli.slice(-12));
+      const v = variacao(doze, somar(cvli.slice(-24, -12)));
+      const pop = somar(municipios.map((m) => m.populacao));
+      const taxa = pop ? (doze / pop) * 100000 : 0;
+      const taxaGo = (somar(cvliGo.slice(-12)) / ind.goias.populacao) * 100000;
+      const li = elemento("li");
+      li.append(elemento("strong", "", `${numeroBr(doze)} mortes violentas`), ` em 12 meses (até ${mesBr(ind.meses[ind.meses.length - 1])}) · `,
+        elemento("span", v.classe, v.texto === "—" ? "sem casos" : v.texto), ` · ${numeroBr(taxa, 1)} por 100 mil hab. (Goiás: ${numeroBr(taxaGo, 1)})`);
+      numeros.append(li);
+    }
+    const inst = cidade?.instituicoes;
+    if (inst) {
+      const lotadas = [];
+      for (const [municipio, porTipo] of Object.entries(inst.municipios)) {
+        for (const tipo of ["prisionais", "acolhimento", "idosos"]) {
+          for (const i of porTipo[tipo] || []) {
+            const pct = i.lotacao?.vagas ? (i.lotacao.ocupados / i.lotacao.vagas) * 100 : 0;
+            if (pct > 100) lotadas.push({ ...i, municipio, pct });
+          }
+        }
+      }
+      for (const u of lotadas.sort((a, b) => b.pct - a.pct).slice(0, 3)) {
+        const li = elemento("li");
+        li.append(elemento("strong", "piora", `${numeroBr(u.pct)}% de lotação`), ` · ${u.nome} (${u.municipio}): ${u.lotacao.ocupados} para ${u.lotacao.vagas} vagas`);
+        numeros.append(li);
+      }
+    }
+    if (numeros.childElementCount) corpo.append(numeros);
+  }
+  return painel;
+}
+
+/** Os julgados pertinentes do último informativo de cada tribunal, os mais relevantes primeiro. */
+function resumoJurisprudencia() {
+  const { painel, corpo } = quadroResumo("Jurisprudência para a sua atuação", "#d6336c", "jurisprudencia", "Todos os informativos");
+  if (!noticias) {
+    corpo.append(elemento("p", "vazio", "Carregando os informativos…"));
+    return painel;
+  }
+  const peso = (j) => Math.min(...j.marcas.map((m) => ORDEM_MARCAS.indexOf(m)).filter((i) => i >= 0), 9);
+  const itens = [];
+  for (const [id, nome] of [["stf", "STF"], ["stj", "STJ"]]) {
+    const info = noticias.informativos?.[id]?.[0];
+    if (!info) continue;
+    for (const j of info.julgados_mp.filter(pertinente)) {
+      itens.push({
+        peso: peso(j),
+        etiquetas: [[`${nome} · Inf. ${info.numero}`, info.novo ? "andamento" : ""], ...j.marcas.map((m) => [NOMES_MARCAS[m]])],
+        titulo: encurtar(j.tese, 260),
+        href: info.pdf ? `${info.pdf}${j.pagina ? `#page=${j.pagina}` : ""}` : info.link,
+        detalhe: [j.ramo, j.assunto].filter(Boolean).join(" · "),
+        destaque: j.marcas.length > 0,
+      });
+    }
+  }
+  itens.sort((a, b) => a.peso - b.peso);
+  const minhas = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
+  corpo.append(listaResumo(itens.slice(0, 6), promotoriasAtuais.length
+    ? `Nenhum julgado dos últimos informativos é pertinente às matérias ${minhas}.`
+    : "Nenhum julgado de interesse do MP nos últimos informativos."));
+  if (itens.length > 6) corpo.append(elemento("p", "nota", `e mais ${itens.length - 6} na aba de jurisprudência.`));
+  const pendentes = ["stf", "stj"].flatMap((id) => (noticias.informativos?.pendentes?.[id] || []).map((p) => `${id.toUpperCase()} ${p.numero}`));
+  if (pendentes.length) corpo.append(elemento("p", "nota", `Já publicados pelos tribunais e ainda não comentados: informativos ${juntarNomes(pendentes)}.`));
+  return painel;
+}
+
+/** Atos do CNMP e do CNJ e leis novas dos últimos dias, pertinentes às promotorias escolhidas. */
+function resumoNormas() {
+  const { painel, corpo } = quadroResumo("Normas e leis novas", "#8b5cf6", "jurisprudencia", "Todas as normas e leis");
+  if (!noticias) {
+    corpo.append(elemento("p", "vazio", "Carregando as normas…"));
+    return painel;
+  }
+  const perfil = perfilPromotorias();
+  const limite = new Date(Date.now() - DIAS_NORMAS_RESUMO * 86400000).toISOString().slice(0, 10);
+  const vale = (item, todoMembro) => !perfil || perfil.plena || (item.materias.length
+    ? item.materias.some((m) => perfil.materias.includes(m)) : todoMembro);
+  const fontes = [["CNMP", noticias.conselhos?.cnmp, true], ["CNJ", noticias.conselhos?.cnj, false],
+    ["Lei federal", noticias.legislacao?.federal, false], ["Lei de Goiás", noticias.legislacao?.estadual, false]];
+  const itens = fontes.flatMap(([origem, lista, todoMembro]) => (lista || [])
+    .filter((i) => i.data && i.data >= limite && vale(i, todoMembro))
+    .map((i) => ({
+      data: i.data,
+      etiquetas: [[origem], ...i.materias.filter((m) => perfil?.materias.includes(m) && !perfil.plena).map((m) => [m, "andamento"])],
+      titulo: `${i.titulo} · ${dataBr(i.data)}`, href: i.link,
+      detalhe: encurtar(i.ementa, 220),
+    })));
+  itens.sort((a, b) => b.data.localeCompare(a.data));
+  corpo.append(listaResumo(itens.slice(0, 6), `Nenhum ato ou lei pertinente nos últimos ${DIAS_NORMAS_RESUMO} dias.`));
+  if (itens.length > 6) corpo.append(elemento("p", "nota", `e mais ${itens.length - 6} na aba de jurisprudência.`));
+  return painel;
+}
+
+/** MPGO: editais abertos, as principais notícias, o CSMP e os cursos com inscrição aberta. */
+function resumoMpgo() {
+  const { painel, corpo } = quadroResumo("MPGO", "#8b5cf6", "mpgo", "Tudo do MPGO");
+  if (!noticias) {
+    corpo.append(elemento("p", "vazio", "Carregando o MPGO…"));
+    return painel;
+  }
+  const destaques = elemento("ul", "resumo-numeros");
+  const abertos = noticias.editais?.abertos || [];
+  if (abertos.length) {
+    const fim = abertos.map((e) => e.fim).sort()[0];
+    const li = elemento("li");
+    li.append(elemento("strong", "", `${abertos.length} ${abertos.length === 1 ? "edital de promoção/remoção aberto" : "editais de promoção/remoção abertos"}`),
+      ` · primeiras inscrições terminam em ${dataCurta(fim)}`);
+    destaques.append(li);
+  }
+  const pauta = (agendas?.csmp || []).find((p) => p.situacao === "andamento") || (agendas?.csmp || []).find((p) => p.situacao === "proxima");
+  if (pauta) {
+    const li = elemento("li");
+    li.append(elemento("strong", "", `CSMP · ${SITUACOES_CSMP[pauta.situacao]}`), ` · ${pauta.titulo} · ${periodo(pauta.inicio, pauta.fim).toLowerCase()}`,
+      pauta.processos ? ` · ${pauta.processos} ${pauta.processos === 1 ? "processo" : "processos"}` : "");
+    destaques.append(li);
+  }
+  for (const e of (noticias.esump?.eventos || []).filter((e) => e.inscricoes).slice(0, 2)) {
+    const li = elemento("li");
+    li.append(elemento("strong", "", "ESUMP · inscrições abertas"), " · ", linkExterno(e.link, e.titulo), e.data ? ` · ${dataCurta(e.data)}` : "");
+    destaques.append(li);
+  }
+  if (destaques.childElementCount) corpo.append(destaques);
+  const mpgo = (noticias.juridico || []).find((o) => o.id === "mpgo");
+  corpo.append(listaResumo((mpgo?.noticias || []).slice(0, 3).map((n) => ({
+    titulo: n.titulo, href: n.link, detalhe: `${n.fonte} · ${tempoRelativo(n.data)}`,
+  })), "Nenhuma notícia recente do MPGO."));
+  return painel;
+}
+
+/** O que está em julgamento hoje no STF e os plenários do Congresso. */
+function resumoAgenda() {
+  const { painel, corpo } = quadroResumo("Agenda de hoje", "#c9a227", "brasil", "Agendas completas");
+  if (!agendas) {
+    corpo.append(elemento("p", "vazio", "Carregando as agendas…"));
+    return painel;
+  }
+  const ul = elemento("ul", "resumo-numeros");
+  const linha = (rotulo, ...texto) => {
+    const li = elemento("li");
+    li.append(elemento("strong", "", rotulo), " · ", ...texto);
+    ul.append(li);
+  };
+  const stf = agendas.stf;
+  for (const v of stf?.virtuais || []) {
+    linha("STF · sessão virtual", `${periodo(v.inicio, v.fim).toLowerCase()} · ${v.plenario + v.primeira_turma + v.segunda_turma} processos · `,
+      linkExterno(v.link, "ver os processos"));
+  }
+  if (stf?.presencial?.data === agendas.hoje) {
+    for (const s of stf.presencial.sessoes) {
+      const temas = s.processos.slice(0, 2).map((p) => p.processo).join("; ");
+      linha(`STF · ${s.colegiado}`, `${s.processos.length} processos na pauta${temas ? ` (${temas}${s.processos.length > 2 ? "…" : ""})` : ""}`);
+    }
+  }
+  const senado = agendas.senado;
+  if (senado?.data === agendas.hoje && senado.plenario?.length) {
+    linha("Senado · Plenário", senado.plenario.map((s) => `${s.hora} ${s.tipo}`).join("; "));
+  }
+  const camara = agendas.camara;
+  const plenCamara = camara?.data === agendas.hoje ? (camara.eventos || []).filter((e) => e.orgao === "PLEN") : [];
+  if (plenCamara.length) linha("Câmara · Plenário", plenCamara.map((e) => `${e.hora} ${e.titulo || e.tipo}`).join("; "));
+  if (agendas.presidente?.data === agendas.hoje && agendas.presidente.compromissos?.length) {
+    linha("Presidente", `${agendas.presidente.compromissos.length} compromissos na agenda`);
+  }
+  corpo.append(ul.childElementCount ? ul : elemento("p", "vazio", "Nenhuma sessão de julgamento ou plenário marcado para hoje."));
+  return painel;
+}
+
+function montarResumo() {
+  const container = document.getElementById("resumo");
+  if (!container) return;
+  container.replaceChildren(resumoRegiao(), resumoJurisprudencia(), resumoNormas(), resumoMpgo(), resumoManchetes(), resumoAgenda());
+  const nota = document.getElementById("nota-resumo");
+  if (nota && noticias) nota.textContent = `Um compilado de todo o conteúdo relevante para quem só tem 5 minutos · atualizado ${tempoRelativo(noticias.atualizado)}`;
+}
+
+// --- Abas: Resumo geral, Brasil e Mundo, Sua região, MPGO e Jurisprudência ---
+
+const ABAS = ["resumo", "brasil", "regiao", "mpgo", "jurisprudencia"];
 
 function mostrarAba(aba, rolar = false) {
   if (!ABAS.includes(aba)) aba = ABAS[0];
