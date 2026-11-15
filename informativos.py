@@ -1,30 +1,35 @@
-"""Informativos de jurisprudência do STF e do STJ, lidos nos sites dos próprios tribunais, com a
-indicação dos julgados que interessam ao Ministério Público estadual.
+"""Informativos comentados do STF e do STJ publicados no Dizer o Direito, com a indicação dos
+julgados que interessam ao Ministério Público estadual.
 
-A fonte primária é o tribunal: o informativo sai primeiro no site dele e só semanas depois é
-comentado no Dizer o Direito. Cada informativo traz o link do tribunal e, quando já publicada,
-a versão comentada do Dizer o Direito (feed do Blogger, pelo número do informativo).
+O Dizer o Direito é um blog do Blogger: o feed por marcador traz o índice de cada informativo,
+com o ramo do Direito (negrito), o assunto (itálico) e cada julgado num parágrafo que começa com
+"§", seguido das marcas ⭐ 🏛️ 🔄. O PDF completo é lido para levar cada julgado à sua página.
 
+Como o tribunal publica o informativo semanas antes do comentário, os sites do STF e do STJ são
+consultados à parte, só para o aviso dos informativos já publicados e ainda não comentados:
 - STF: a página de informativos lista o número mais recente; cada edição é um HTML do Word
-  (informativoNNNN.htm) com, para cada julgado, o ramo e os assuntos em maiúsculas, o título
-  com o processo e o "Resumo:" cujo primeiro parágrafo é a tese.
-- STJ: a página do Informativo de Jurisprudência traz o número da última edição; cada edição
-  lista as notas com processo, ramo do Direito, tema e destaque (a tese), e cada nota tem
-  endereço próprio (?livre=@CNOT=NNNNNN).
+  (informativoNNNN.htm).
+- STJ: a página do Informativo de Jurisprudência traz o número da última edição.
 """
 
 import html
+import io
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import quote
 
 import requests
+from pypdf import PdfReader
 
 TIMEOUT = 30
 NAVEGADOR = {"User-Agent": "Mozilla/5.0"}
 DIAS_NOVO = 7  # informativo publicado há menos que isso aparece como "novo"
 QUANTIDADE = {"stf": 5, "stj": 3}  # informativos mostrados por tribunal (o quadro do STF tem mais espaço)
+MAXIMO_PENDENTES = 6  # no aviso dos ainda não comentados
+CARACTERES_BUSCA = 50  # início da tese procurado no PDF para achar a página do julgado
+MARCAS = {"⭐": "importante", "🏛": "repetitivo", "🔄": "mudanca"}
+_paginas_pdf = {}  # texto das páginas de cada PDF já baixado (não mudam depois de publicados)
 
 STF_LISTA = "https://portal.stf.jus.br/textos/verTexto.asp?servico=informativoSTF"
 STF_EDICAO = "https://www.stf.jus.br/arquivo/informativo/documento/informativo{numero}.htm"
@@ -33,10 +38,9 @@ STJ_BASE = "https://processo.stj.jus.br/jurisprudencia/externo/informativo/"
 STJ_EDICAO = STJ_BASE + "?acao=pesquisarumaedicao&livre={numero:04d}.cod."
 STJ_NOTA = STJ_BASE + "?livre=@CNOT={nota}"
 
-# Versão comentada no Dizer o Direito (blog do Blogger), procurada pelo número do informativo
+# Dizer o Direito (blog do Blogger): feed por marcador
 FEED_DOD = "https://www.blogger.com/feeds/2154959394178215399/posts/default/-/{rotulo}"
 ROTULOS_DOD = {"stf": "Informativo comentado STF", "stj": "informativo comentado STJ"}
-POSTS_DOD = 15  # o Dizer o Direito comenta com algumas semanas de atraso
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
          "outubro", "novembro", "dezembro"]
@@ -274,43 +278,132 @@ def informativo_stj(numero):
     }
 
 
-# --- Dizer o Direito ---
+# --- Dizer o Direito (fonte dos informativos mostrados) ---
+
+def ler_indice(conteudo):
+    """Julgados do índice do post: [{ramo, assunto, tese, marcas, interesse_mp}]."""
+    inicio = conteudo.find("NDICE DO INFORMATIVO")
+    if inicio < 0:
+        return []
+    julgados, ramo, assunto = [], "", ""
+    for paragrafo in re.findall(r"<p\b[^>]*>(.*?)</p>", conteudo[inicio:], re.S):
+        texto = _texto(paragrafo)
+        if not texto or texto.startswith("NDICE") or "julgado importante" in texto:
+            continue
+        if texto.upper() != texto and len(texto) >= 40:
+            # Alguns itens vêm sem o marcador "§"; o "§" no meio é de artigo de lei
+            tese = texto[1:] if texto.startswith("§") else texto
+            marcas = [nome for simbolo, nome in MARCAS.items() if simbolo in tese]
+            tese = re.sub(r"[⭐🏛🔄️]", "", tese).strip()
+            julgados.append({
+                "ramo": ramo,
+                "assunto": assunto,
+                "tese": tese,
+                "marcas": marcas,
+                "interesse_mp": _interesse_mp(ramo, assunto, tese),
+            })
+        elif texto.upper() == texto:  # títulos: ramo em negrito, assunto em itálico
+            if re.search(r"<b\b", paragrafo):
+                ramo, assunto = texto, ""
+            else:
+                assunto = texto
+    return julgados
+
+
+def _sem_espacos(texto):
+    # A extração do PDF às vezes quebra palavras ("fixo u"): compara sem espaço nenhum
+    return re.sub(r"\s+", "", texto).lower()
+
+
+def paginas_pdf(url):
+    if url not in _paginas_pdf:
+        resp = requests.get(url, timeout=60, headers=NAVEGADOR)
+        resp.raise_for_status()
+        leitor = PdfReader(io.BytesIO(resp.content))
+        _paginas_pdf[url] = [_sem_espacos(p.extract_text() or "") for p in leitor.pages]
+    return _paginas_pdf[url]
+
+
+def localizar_julgados(url, julgados):
+    """Anota em cada julgado a página do PDF completo onde ele começa.
+
+    O PDF começa pelo índice; no corpo, cada julgado abre com a mesma tese do índice e
+    eles seguem a mesma ordem, então a busca continua de onde parou a anterior.
+    """
+    paginas = paginas_pdf(url)
+
+    def no_corpo(pagina, chave):
+        # No índice do PDF cada tese vem logo depois do marcador "▪"; no corpo, não
+        posicao = pagina.find(chave)
+        while posicao >= 0:
+            if posicao == 0 or pagina[posicao - 1] != "▪":
+                return True
+            posicao = pagina.find(chave, posicao + 1)
+        return False
+
+    a_partir = 0
+    for julgado in julgados:
+        chave = _sem_espacos(julgado["tese"])[:CARACTERES_BUSCA]
+        achou = next((i for i in range(a_partir, len(paginas)) if chave and no_corpo(paginas[i], chave)), None)
+        if achou is not None:
+            julgado["pagina"] = achou + 1
+            a_partir = achou
+
+
+def _informativo(entrada):
+    titulo = entrada["title"]["$t"]
+    numero = re.search(r"\d{3,4}", titulo)
+    publicado = datetime.fromisoformat(entrada["published"]["$t"])
+    conteudo = entrada.get("content", {}).get("$t", "")
+    julgados = ler_indice(conteudo)
+    pdfs = re.findall(r'href="([^"]+\.pdf)"', conteudo)
+    completo = next((p for p in pdfs if "resumid" not in p.lower()), None)
+    julgados_mp = [j for j in julgados if j["interesse_mp"]]
+    if completo and julgados_mp:
+        try:
+            localizar_julgados(completo, julgados)
+        except Exception as erro:  # sem a página, o link abre o PDF no começo
+            print(f"[informativos] Falha ao ler o PDF {completo}: {erro}")
+    return {
+        "numero": str(int(numero.group(0))) if numero else "",
+        "titulo": titulo,
+        "data": publicado.astimezone(timezone.utc).isoformat(timespec="seconds"),
+        "novo": (datetime.now(timezone.utc) - publicado).days < DIAS_NOVO,
+        "link": next(l["href"] for l in entrada["link"] if l["rel"] == "alternate"),
+        "pdf": completo,
+        "total": len(julgados),
+        "julgados_mp": julgados_mp,
+    }
+
 
 def comentados(tribunal):
-    """{número do informativo: {"link", "pdf", "data"}} dos últimos posts do Dizer o Direito."""
     resp = requests.get(FEED_DOD.format(rotulo=quote(ROTULOS_DOD[tribunal])),
-                        params={"alt": "json", "max-results": POSTS_DOD}, timeout=TIMEOUT, headers=NAVEGADOR)
+                        params={"alt": "json", "max-results": QUANTIDADE[tribunal]},
+                        timeout=TIMEOUT, headers=NAVEGADOR)
     resp.raise_for_status()
-    achados = {}
-    for entrada in resp.json()["feed"].get("entry", []):
-        numero = re.search(r"\d{3,4}", entrada["title"]["$t"])
-        if not numero:
-            continue
-        conteudo = entrada.get("content", {}).get("$t", "")
-        pdfs = re.findall(r'href="([^"]+\.pdf)"', conteudo)
-        achados.setdefault(str(int(numero.group(0))), {
-            "link": next(l["href"] for l in entrada["link"] if l["rel"] == "alternate"),
-            "pdf": next((p for p in pdfs if "resumid" not in p.lower()), None),
-            "data": datetime.fromisoformat(entrada["published"]["$t"]).astimezone(timezone.utc).isoformat(timespec="seconds"),
-        })
-    return achados
+    return [_informativo(entrada) for entrada in resp.json()["feed"].get("entry", [])]
 
 
-def ultimos_informativos(tribunal, quantidade=None):
-    quantidade = quantidade or QUANTIDADE[tribunal]
+# --- Aviso: já publicados pelo tribunal, ainda não comentados ---
+
+def pendentes(tribunal, ultimo_comentado):
+    """Informativos que o tribunal já publicou e o Dizer o Direito ainda não comentou:
+    [{numero, data, link, pdf, total, de_interesse}], do mais novo para o mais antigo."""
     ultimo, ler = (ultimo_stf(), informativo_stf) if tribunal == "stf" else (ultimo_stj(), informativo_stj)
-    with ThreadPoolExecutor(max_workers=quantidade + 1) as executor:
-        dod = executor.submit(comentados, tribunal)
-        edicoes = list(executor.map(lambda n: _ou_none(ler, n), range(ultimo, ultimo - quantidade, -1)))
-        try:
-            dod = dod.result()
-        except Exception as erro:
-            print(f"[informativos] Falha no Dizer o Direito ({tribunal.upper()}): {erro}")
-            dod = {}
-    for info in edicoes:
-        if info:
-            info["comentado"] = dod.get(info["numero"])
-    return [info for info in edicoes if info]
+    numeros = list(range(ultimo, max(ultimo_comentado, ultimo - MAXIMO_PENDENTES), -1))
+    with ThreadPoolExecutor(max_workers=max(len(numeros), 1)) as executor:
+        edicoes = list(executor.map(lambda n: _ou_none(ler, n), numeros))
+    saida = []
+    for numero, info in zip(numeros, edicoes):
+        url = (STF_EDICAO if tribunal == "stf" else STJ_EDICAO).format(numero=numero)
+        saida.append({
+            "numero": str(numero),
+            "data": info["data"] if info else None,
+            "link": url,
+            "pdf": info["pdf"] if info else None,
+            "total": info["total"] if info else None,
+        })
+    return saida
 
 
 def _ou_none(ler, numero):
@@ -322,24 +415,33 @@ def _ou_none(ler, numero):
 
 
 def coletar():
-    """Os últimos informativos do STF e do STJ. Um tribunal com falha vira None."""
-    dados = {}
+    """Os últimos informativos comentados do Dizer o Direito (STF e STJ) e, à parte, os que os
+    tribunais já publicaram e ainda não foram comentados. Uma parte com falha vira None."""
+    dados = {"pendentes": {}}
     for tribunal in ("stf", "stj"):
         try:
-            dados[tribunal] = ultimos_informativos(tribunal) or None
+            dados[tribunal] = comentados(tribunal) or None
         except Exception as erro:
             print(f"[informativos] Falha nos informativos do {tribunal.upper()}: {erro}")
             dados[tribunal] = None
+        numeros = [int(i["numero"]) for i in dados[tribunal] or [] if i["numero"]]
+        try:
+            dados["pendentes"][tribunal] = pendentes(tribunal, max(numeros)) if numeros else None
+        except Exception as erro:
+            print(f"[informativos] Falha ao consultar o site do {tribunal.upper()}: {erro}")
+            dados["pendentes"][tribunal] = None
     return dados
 
 
 if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding="utf-8")
-    for tribunal, lista in coletar().items():
-        for info in lista or []:
-            comentado = info["comentado"]["link"] if info["comentado"] else "ainda não comentado"
-            print(f"\n== {tribunal.upper()} {info['numero']} ({(info['data'] or '?')[:10]}, novo={info['novo']}) "
-                  f"{len(info['julgados_mp'])} de {info['total']} julgados de interesse do MP · DoD: {comentado}")
+    dados = coletar()
+    for tribunal in ("stf", "stj"):
+        for info in dados[tribunal] or []:
+            print(f"\n== {tribunal.upper()} {info['numero']} ({info['data'][:10]}, novo={info['novo']}) "
+                  f"{len(info['julgados_mp'])} de {info['total']} julgados de interesse do MP")
             for j in info["julgados_mp"]:
-                print(f"  [{', '.join(j['interesse_mp'])}] {j['ramo']} / {j['assunto'][:60]}: {j['tese'][:90]}")
+                print(f"  p.{j.get('pagina', '?')} [{', '.join(j['interesse_mp'])}] {j['ramo']} / {j['assunto'][:50]}: {j['tese'][:80]}")
+        print(f"\n   Pendentes {tribunal.upper()}:",
+              [(p["numero"], (p["data"] or "")[:10], p["total"]) for p in dados["pendentes"][tribunal] or []])

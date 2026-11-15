@@ -56,9 +56,7 @@ SUAS_ARQUIVOS = {
 # de execução própria, é a promotoria criminal que acompanha o presídio
 TIPOS = [
     {"id": "escolas", "nome": "Escolas", "materias": ["Educação", "Infância e juventude", "Cidadania"]},
-    {"id": "hospitais", "nome": "Hospitais e unidades de pronto atendimento", "materias": ["Saúde", "Cidadania"]},
-    {"id": "ubs", "nome": "Unidades Básicas de Saúde (UBS)", "materias": ["Saúde", "Cidadania"]},
-    {"id": "caps", "nome": "Centros de Atenção Psicossocial (CAPS)", "materias": ["Saúde", "Cidadania"]},
+    {"id": "saude", "nome": "Unidades de saúde (hospitais, UPAs, UBS e CAPS)", "materias": ["Saúde", "Cidadania"]},
     {"id": "cras", "nome": "Centros de Referência de Assistência Social (CRAS)",
      "materias": ["Cidadania", "Infância e juventude", "Idoso e pessoa com deficiência"]},
     {"id": "creas", "nome": "Centros de Referência Especializados de Assistência Social (CREAS)",
@@ -84,6 +82,10 @@ CNES_TIPOS = {
     73: ("hospitais", "Pronto atendimento (UPA)"), 70: ("caps", "CAPS"),
 }
 DEPENDENCIA_ESCOLA = {"1": "Federal", "2": "Estadual", "3": "Municipal", "4": "Privada"}
+# As escolas vêm agrupadas pela natureza, nesta ordem; as unidades de saúde, pelo tipo
+GRUPOS_ESCOLA = {"Federal": "Federais", "Estadual": "Estaduais", "Municipal": "Municipais", "Privada": "Privadas"}
+GRUPOS_SAUDE = {"hospitais": "Hospitais e pronto atendimento", "ubs": "Unidades Básicas de Saúde (UBS)",
+                "caps": "Centros de Atenção Psicossocial (CAPS)"}
 PUBLICO_SUAS = [  # público atendido (Censo SUAS) → tipo
     (re.compile(r"crian|jovens egressos", re.I), "acolhimento"),
     (re.compile(r"idos|defici", re.I), "idosos"),
@@ -116,6 +118,34 @@ def _nome(texto):
 
 _ABREVIACOES = {"DR": "Dr.", "DRA": "Dra.", "PROF": "Prof.", "PROFA": "Profa.", "ESC": "Esc.", "MUN": "Mun.",
                 "EST": "Est.", "COL": "Col.", "STA": "Sta.", "STO": "Sto.", "N": "n.", "SRA": "Sra."}
+
+
+def _cep(texto):
+    digitos = re.sub(r"\D", "", texto or "")
+    return f"CEP {digitos[:5]}-{digitos[5:]}" if len(digitos) == 8 else ""
+
+
+def _montar_endereco(rua, numero="", complemento="", bairro="", cep=""):
+    """"Rua Brasil, 1606, Qd. 2, Vila Nova, CEP 76300-000"."""
+    rua = _nome(rua)
+    if numero is not None:  # None: a base não tem o número à parte (vem junto da rua)
+        numero = numero.strip()
+        numero = "s/n" if numero.lower() in {"", "0", "sn", "s/n", "s.n."} else numero
+    complemento = _nome(complemento).strip(" -")
+    complemento = "" if complemento.lower() in {"0", "-", "sn", "s/n", "s.n."} else complemento
+    partes = [rua, numero if rua else "", complemento, _nome(bairro), _cep(cep)]
+    return ", ".join(p for p in partes if p)
+
+
+def _telefone(ddd, numero):
+    numero = re.sub(r"\D", "", numero or "")
+    ddd = re.sub(r"\D", "", ddd or "")
+    if not ddd and len(numero) in (10, 11):  # o DDD veio junto: "6233073131"
+        ddd, numero = numero[:2], numero[2:]
+    if len(numero) < 8:
+        return ""
+    numero = f"{numero[:-4]}-{numero[-4:]}"
+    return f"({ddd}) {numero}" if ddd else numero
 
 
 def _baixar(url, destino, timeout=600):
@@ -155,17 +185,22 @@ def _escolas(pasta, zip_local=None):
                 if linha["TP_SITUACAO_FUNCIONAMENTO"] != "1":  # 1 = em atividade
                     continue
                 matriculas = int(linha["QT_MAT_BAS"] or 0)
-                detalhe = [DEPENDENCIA_ESCOLA.get(linha["TP_DEPENDENCIA"], ""),
-                           f"{matriculas} matrículas" if matriculas else "",
-                           "zona rural" if linha["TP_LOCALIZACAO"] == "2" else _nome(linha["NO_BAIRRO"])]
-                escolas.setdefault(linha["NO_MUNICIPIO"], []).append(
-                    {"nome": _nome(linha["NO_ENTIDADE"]), "detalhe": " · ".join(d for d in detalhe if d),
-                     "ordem": -matriculas})
+                dependencia = DEPENDENCIA_ESCOLA.get(linha["TP_DEPENDENCIA"], "")
+                detalhe = [dependencia, f"{matriculas} matrículas" if matriculas else "",
+                           "zona rural" if linha["TP_LOCALIZACAO"] == "2" else ""]
+                escolas.setdefault(linha["NO_MUNICIPIO"], []).append({
+                    "nome": _nome(linha["NO_ENTIDADE"]), "detalhe": " · ".join(d for d in detalhe if d),
+                    "grupo": GRUPOS_ESCOLA.get(dependencia, "Outras"),
+                    "endereco": _montar_endereco(linha.get("DS_ENDERECO"), linha.get("NU_ENDERECO"),
+                                                 linha.get("DS_COMPLEMENTO"), linha.get("NO_BAIRRO"), linha.get("CO_CEP")),
+                    "telefone": _telefone(linha.get("NU_DDD"), linha.get("NU_TELEFONE")),
+                    "ordem": (list(GRUPOS_ESCOLA).index(dependencia) if dependencia in GRUPOS_ESCOLA else 9, 0)})
     return municipios, ano, escolas
 
 
 def _cnes(municipios):
-    """{nome do município: {"hospitais"|"ubs"|"caps": [unidades]}} pela API do CNES."""
+    """{nome do município: {"saude": [unidades]}} pela API do CNES; o grupo (hospitais, UBS, CAPS)
+    vai em cada unidade."""
     por_codigo6 = {codigo[:6]: nome for codigo, nome in municipios.items()}
     saida = {}
     for tipo, (grupo, descricao) in CNES_TIPOS.items():
@@ -187,12 +222,17 @@ def _cnes(municipios):
                 if grupo != "hospitais" and natureza != "1":
                     continue
                 sus = "atende pelo SUS" if grupo == "hospitais" and e.get("estabelecimento_faz_atendimento_ambulatorial_sus") == "SIM" else ""
-                detalhe = [descricao if grupo == "hospitais" else "", mantenedor if grupo == "hospitais" else "", sus,
-                           _nome(e.get("bairro_estabelecimento") or "")]
-                saida.setdefault(municipio, {}).setdefault(grupo, []).append({
+                detalhe = [descricao if grupo == "hospitais" else "", mantenedor if grupo == "hospitais" else "", sus]
+                saida.setdefault(municipio, {}).setdefault("saude", []).append({
                     "nome": _nome(e.get("nome_fantasia") or e.get("nome_razao_social")),
                     "detalhe": " · ".join(d for d in detalhe if d),
-                    "ordem": 0 if e.get("estabelecimento_possui_atendimento_hospitalar") else 1,
+                    "grupo": GRUPOS_SAUDE[grupo],
+                    "endereco": _montar_endereco(e.get("endereco_estabelecimento"), e.get("numero_estabelecimento"),
+                                                 e.get("complemento_estabelecimento"), e.get("bairro_estabelecimento"),
+                                                 e.get("codigo_cep_estabelecimento")),
+                    "telefone": _telefone("", e.get("numero_telefone_estabelecimento")),
+                    "ordem": (list(GRUPOS_SAUDE).index(grupo),
+                              0 if e.get("estabelecimento_possui_atendimento_hospitalar") else 1),
                 })
             if len(lista) < 20:
                 break
@@ -225,8 +265,13 @@ def _prisionais(pasta, municipios):
         vagas = sum(_numero(linha[i]) for i in capacidade)
         presos = sum(_numero(linha[i]) for i in populacao)
         detalhe = [f"{vagas} vagas" if vagas else "", f"{presos} presos" if presos else ""]
-        saida.setdefault(municipio, []).append({"nome": linha[col["Nome do Estabelecimento"]].strip(),
-                                                "detalhe": " · ".join(d for d in detalhe if d), "ordem": -presos})
+        campo = lambda nome: linha[col[nome]] if nome in col else ""  # noqa: E731
+        saida.setdefault(municipio, []).append({
+            "nome": linha[col["Nome do Estabelecimento"]].strip(),
+            "detalhe": " · ".join(d for d in detalhe if d),
+            "endereco": _montar_endereco(campo("Endereço"), None, "", campo("Bairro"), campo("CEP")),
+            "telefone": _telefone("", campo("Telefone Principal")),
+            "ordem": (-presos, 0)})
     return saida
 
 
@@ -237,12 +282,9 @@ def _endereco(linha, coluna_telefone):
     rua = _nome(linha.get("q0_3", ""))
     if rua and tipo and not rua.lower().startswith(tipo.lower()):
         rua = f"{tipo} {rua}"
-    numero = linha.get("q0_4", "").strip()
-    numero = "s/n" if numero.lower() in {"", "0", "sn", "s/n"} else numero
-    bairro = _nome(linha.get("q0_6", ""))
-    endereco = ", ".join(p for p in [rua, numero if rua else "", bairro] if p)
-    telefone = re.sub(r"\s+", " ", linha.get(coluna_telefone, "")).strip()
-    return endereco, telefone if re.search(r"\d{4}", telefone) else ""
+    cep = next((linha.get(c, "") for c in ("q0_8", "q0_7") if re.fullmatch(r"\s*\d{5}-?\d{3}\s*", linha.get(c, ""))), "")
+    endereco = _montar_endereco(rua, linha.get("q0_4", ""), linha.get("q0_5", ""), linha.get("q0_6", ""), cep)
+    return endereco, _telefone("", linha.get(coluna_telefone, ""))
 
 
 # Nomes que não identificam a unidade ("Unidade de Acolhimento", "CREAS")
@@ -298,7 +340,7 @@ def _assistencia(pasta, municipios):
             endereco, telefone = _endereco(linha, coluna_telefone)
             saida.setdefault(municipio, {}).setdefault(grupo, []).append({
                 "nome": nome[:1].upper() + nome[1:], "detalhe": " · ".join(d for d in detalhe if d),
-                "endereco": endereco, "telefone": telefone, "ordem": 0})
+                "endereco": endereco, "telefone": telefone, "ordem": (0, 0)})
             quantos += 1
         print(f"[instituicoes] Censo SUAS {arquivo_id}: {quantos}")
     return saida
@@ -317,7 +359,12 @@ def atualizar(zip_censo=None, manter_escolas=False):
         pasta = Path(temp)
         municipios = _municipios()
         if manter_escolas:
-            escolas = {m: g.get("escolas", []) for m, g in anterior["municipios"].items()}
+            escolas = {}
+            for m, g in anterior["municipios"].items():
+                for e in g.get("escolas", []):
+                    natureza = e["detalhe"].split(" · ")[0]
+                    ordem = list(GRUPOS_ESCOLA).index(natureza) if natureza in GRUPOS_ESCOLA else 9
+                    escolas.setdefault(m, []).append({**e, "grupo": GRUPOS_ESCOLA.get(natureza, "Outras"), "ordem": (ordem, 0)})
             fonte_escolas = anterior["fontes"]["escolas"]
         else:
             _, ano_escolar, escolas = _escolas(pasta, zip_censo)
@@ -333,8 +380,7 @@ def atualizar(zip_censo=None, manter_escolas=False):
         limpo = {}
         for grupo, itens in grupos.items():
             if itens:
-                if all("ordem" in i for i in itens):  # as escolas reaproveitadas já vêm em ordem
-                    itens.sort(key=lambda i: (i["ordem"], i["nome"]))
+                itens.sort(key=lambda i: (i.get("ordem", (0, 0)), i["nome"]))
                 limpo[grupo] = [{k: v for k, v in i.items() if k != "ordem" and v} for i in itens]
         por_municipio[nome] = limpo
     dados = {

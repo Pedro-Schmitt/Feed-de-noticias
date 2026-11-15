@@ -865,3 +865,55 @@ footer { padding-bottom: 24px; }
 .instituicoes-outras > summary { cursor: pointer; font-size: 0.88rem; font-weight: 600; color: var(--suave); padding: 6px 0 10px; }
 .instituicoes-outras > summary:hover { color: var(--cor); }
 .instituicoes-lista li .instituicoes-detalhe + .instituicoes-detalhe { margin-top: 1px; }
+
+/* --- Abas: Brasil e Mundo, Sua região, MPGO e Jurisprudência --- */
+.abas {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 24px 0 0; padding: 10px 0;
+  background: var(--fundo);
+  border-bottom: 1px solid var(--borda);
+}
+.abas button {
+  font: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+  padding: 9px 16px; border-radius: 999px;
+  border: 1px solid var(--borda); background: var(--painel); color: var(--suave);
+}
+.abas button:hover { color: var(--texto); }
+.abas button.ativo { background: var(--texto); border-color: var(--texto); color: var(--painel); }
+.aba > .area:first-child { margin-top: 24px; }
+@media (max-width: 640px) {
+  .abas { gap: 4px; }
+  .abas button { padding: 7px 11px; font-size: 0.85rem; }
+}
+
+/* Aviso dos informativos já publicados pelo tribunal e ainda não comentados */
+.aviso-pendentes {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+  background: color-mix(in srgb, var(--cor) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor) 30%, transparent);
+}
+.aviso-pendentes-titulo { margin: 0 0 4px; font-size: 0.85rem; }
+.aviso-pendentes-lista { margin: 0; font-size: 0.85rem; }
+.aviso-pendentes-lista a { color: var(--cor); font-weight: 600; }
+.aviso-pendentes-lista a:hover { text-decoration: underline; }
+
+/* Instituições: uma parte por cidade; o nome abre endereço, telefone e mapa */
+.instituicoes-cidade { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--borda); }
+.instituicoes-cidade:first-of-type { border-top: 0; padding-top: 0; }
+.instituicoes-cidade > h3 { margin: 0 0 10px; font-size: 1.1rem; }
+.instituicoes-subgrupo {
+  padding: 10px 0 4px !important; border-top: 0 !important;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--suave);
+}
+.instituicao summary { cursor: pointer; list-style: none; display: flex; flex-direction: column; }
+.instituicao summary::-webkit-details-marker { display: none; }
+.instituicao-nome { font-size: 0.9rem; font-weight: 500; }
+.instituicao summary:hover .instituicao-nome { color: var(--cor); text-decoration: underline; }
+.instituicao[open] .instituicao-nome { color: var(--cor); }
+.instituicao-contato {
+  display: flex; flex-direction: column; gap: 2px; margin: 6px 0 2px; padding: 6px 10px;
+  border-left: 3px solid var(--cor); font-size: 0.8rem; color: var(--suave);
+}
+.instituicao-contato a { color: var(--cor); font-weight: 600; width: fit-content; }
+.instituicao-contato a:hover { text-decoration: underline; }

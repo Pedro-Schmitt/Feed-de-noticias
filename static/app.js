@@ -326,6 +326,7 @@ function montarJuridico() {
       colunas.append(csmp);
     }
     mpgo.append(colunas, blocoEsump(noticias.esump));
+    document.getElementById("mpgo").replaceChildren(mpgo);
   }
   preencherAgendas();
 }
@@ -361,13 +362,18 @@ function dataPublicacao(iso) {
   return `em ${dia(data)}`;
 }
 
-/** Um informativo: a fonte primária é o site do tribunal; a versão comentada do Dizer o
- * Direito, que sai semanas depois, vem logo abaixo quando já publicada. */
-function blocoInformativo(info, tribunal) {
+/** Link do julgado: o PDF completo do Dizer o Direito, já na página do julgado quando achada. */
+function linkJulgado(info, julgado, ...conteudo) {
+  const href = info.pdf ? `${info.pdf}${julgado.pagina ? `#page=${julgado.pagina}` : ""}` : info.link;
+  return link({ link: href }, ...conteudo);
+}
+
+/** Um informativo comentado do Dizer o Direito, com os julgados de interesse. */
+function blocoInformativo(info) {
   const bloco = elemento("div", "informativo-bloco");
   const titulo = elemento("p", "informativo-titulo");
   if (info.novo) titulo.append(elemento("span", "etiqueta andamento", "Novo"));
-  titulo.append(`Informativo ${info.numero}${info.data ? ` · divulgado ${dataPublicacao(info.data)}` : ""}`);
+  titulo.append(`Informativo ${info.numero} · publicado ${dataPublicacao(info.data)}`);
   const perfil = perfilPromotorias();
   const daPromotoria = Boolean(perfil) && filtroJurisprudencia === "promotoria";
   const julgados = daPromotoria ? info.julgados_mp.filter(pertinente) : info.julgados_mp;
@@ -379,24 +385,17 @@ function blocoInformativo(info, tribunal) {
       ? `Nenhum dos ${info.total} julgados é pertinente às matérias ${minhas}`
       : `Nenhum dos ${info.total} julgados tem relação direta com a atuação do MP estadual`;
   const ler = elemento("p", "informativo-resumo", `${resumo} · `);
-  ler.append(link(info, `Ler no site do ${tribunal}`));
-  if (info.pdf) ler.append(" · ", link({ link: info.pdf }, "PDF"));
-  const comentado = elemento("p", "informativo-resumo informativo-comentado");
-  if (info.comentado) {
-    comentado.append("Versão comentada: ", link({ link: info.comentado.link }, "Dizer o Direito"));
-    if (info.comentado.pdf) comentado.append(" · ", link({ link: info.comentado.pdf }, "PDF comentado"));
-  } else {
-    comentado.append("Versão comentada do Dizer o Direito: ainda não publicada (costuma sair semanas depois do tribunal).");
-  }
-  bloco.append(titulo, ler, comentado);
+  ler.append(link(info, "Ler no Dizer o Direito"));
+  if (info.pdf) ler.append(" · ", link({ link: info.pdf }, "PDF completo"));
+  bloco.append(titulo, ler);
 
   if (julgados.length) {
     const lista = elemento("ul", "julgados");
     for (const j of julgados) {
       const item = elemento("li", j.marcas.includes("importante") ? "destacado" : "");
-      const tese = link({ link: j.link || info.link }, j.tese);
+      const tese = linkJulgado(info, j, j.tese);
       tese.className = "julgado-tese";
-      tese.title = `Abrir o julgado no site do ${tribunal}`;
+      tese.title = j.pagina ? `Abrir o PDF completo na página ${j.pagina}` : "Abrir o PDF completo";
       item.append(elemento("p", "julgado-tema", [j.ramo, j.assunto].filter(Boolean).join(" · ")), tese);
       const etiquetas = elemento("div", "julgado-etiquetas");
       for (const motivo of j.interesse_mp) {
@@ -405,12 +404,32 @@ function blocoInformativo(info, tribunal) {
         etiquetas.append(elemento("span", casa && !perfil.plena ? "etiqueta andamento" : "etiqueta", motivo));
       }
       for (const marca of j.marcas) etiquetas.append(elemento("span", "marca", NOMES_MARCAS[marca]));
+      if (j.pagina) etiquetas.append(linkJulgado(info, j, `Ver no PDF (p. ${j.pagina})`));
       item.append(etiquetas);
       lista.append(item);
     }
     bloco.append(lista);
   }
   return bloco;
+}
+
+/** Aviso no início do quadro: informativos que o tribunal já publicou e o Dizer o Direito ainda
+ * não comentou (por isso ainda não aparecem aqui), com o link de cada um no site do tribunal. */
+function avisoPendentes(pendentes, nome) {
+  if (!pendentes?.length) return null;
+  const aviso = elemento("div", "aviso-pendentes");
+  const plural = pendentes.length > 1;
+  aviso.append(elemento("p", "aviso-pendentes-titulo",
+    `${plural ? `${pendentes.length} informativos já publicados` : "1 informativo já publicado"} pelo ${nome} ` +
+    `ainda não ${plural ? "foram comentados" : "foi comentado"} pelo Dizer o Direito e por isso não ${plural ? "aparecem" : "aparece"} abaixo. Se quiser, leia no site do tribunal:`));
+  const lista = elemento("p", "aviso-pendentes-lista");
+  pendentes.forEach((p, i) => {
+    if (i) lista.append(" · ");
+    const texto = `Informativo ${p.numero}${p.data ? ` (${dataPublicacao(p.data).replace(/^em /, "")})` : ""}`;
+    lista.append(link({ link: p.link }, texto));
+  });
+  aviso.append(lista);
+  return aviso;
 }
 
 function montarInformativos() {
@@ -426,12 +445,14 @@ function montarInformativos() {
     const painel = elemento("section", "painel secao informativo");
     painel.style.setProperty("--cor", CORES_SECOES[id]);
     painel.append(elemento("h2", "", `Informativos do ${nome}`));
+    const aviso = avisoPendentes(noticias.informativos?.pendentes?.[id], nome);
+    if (aviso) painel.append(aviso);
     if (!lista?.length) {
-      painel.append(elemento("p", "vazio", `Não foi possível consultar o site do ${nome} agora.`));
+      painel.append(elemento("p", "vazio", "Não foi possível consultar o Dizer o Direito agora."));
     } else {
       // Os informativos rolam dentro do quadro, para a página não ficar comprida
       const corpo = elemento("div", "informativo-corpo");
-      lista.forEach((info) => corpo.append(blocoInformativo(info, nome)));
+      lista.forEach((info) => corpo.append(blocoInformativo(info)));
       painel.append(corpo);
     }
     container.append(painel);
@@ -717,9 +738,33 @@ const MOTIVOS_MATERIA = {
 };
 
 
-/** Um tipo de instituição (escolas, CRAS...) como lista que abre e fecha, com as do município ou da comarca. */
-function grupoInstituicoes(tipo, inst, cidades, perfil) {
-  const itens = cidades.flatMap((c) => (inst.municipios[c][tipo.id] || []).map((i) => ({ ...i, municipio: c })));
+/** Uma instituição: o nome abre o endereço completo, o telefone e o link do mapa. */
+function itemInstituicao(i, municipio) {
+  const li = elemento("li");
+  const caixa = elemento("details", "instituicao");
+  const resumo = elemento("summary");
+  resumo.append(elemento("span", "instituicao-nome", i.nome));
+  if (i.detalhe) resumo.append(elemento("span", "instituicoes-detalhe", i.detalhe));
+  caixa.append(resumo);
+  const contato = elemento("div", "instituicao-contato");
+  contato.append(elemento("span", "", i.endereco ? `${i.endereco} · ${municipio}/GO` : `Endereço não informado na base oficial · ${municipio}/GO`));
+  if (i.telefone) {
+    const tel = elemento("a", "", `Tel. ${i.telefone}`);
+    tel.href = `tel:${i.telefone.replace(/\D/g, "")}`;
+    contato.append(tel);
+  } else {
+    contato.append(elemento("span", "", "Telefone não informado na base oficial"));
+  }
+  const busca = i.endereco ? `${i.nome}, ${i.endereco}, ${municipio} - GO` : `${i.nome}, ${municipio} - GO`;
+  contato.append(linkExterno(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, "Ver no mapa"));
+  caixa.append(contato);
+  li.append(caixa);
+  return li;
+}
+
+/** Um tipo de instituição (escolas, saúde, CRAS...) de uma cidade, como lista que abre e fecha.
+ * Escolas e unidades de saúde vêm divididas em grupos (natureza da escola, tipo da unidade). */
+function grupoInstituicoes(tipo, itens, municipio, perfil) {
   const grupo = elemento("details", "instituicoes-grupo");
   const resumo = elemento("summary");
   resumo.append(elemento("span", "instituicoes-nome", tipo.nome), elemento("span", "instituicoes-conta", String(itens.length)));
@@ -730,31 +775,23 @@ function grupoInstituicoes(tipo, inst, cidades, perfil) {
     materias.append(elemento("span", casa ? "etiqueta andamento" : "etiqueta", m), " ");
   });
   grupo.append(materias);
-  if (!itens.length) {
-    grupo.append(elemento("p", "vazio", "Nenhuma registrada nas bases oficiais."));
-    return grupo;
-  }
   const ul = elemento("ul", "instituicoes-lista lista-rolagem");
+  let atual = null;
   for (const i of itens) {
-    const li = elemento("li");
-    // Com endereço (bases da assistência social), o mapa procura o endereço: o nome às vezes é genérico
-    const busca = i.endereco ? `${i.endereco}, ${i.municipio} - GO` : `${i.nome}, ${i.municipio} - GO`;
-    const nome = linkExterno(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, i.nome);
-    nome.title = "Ver no mapa";
-    li.append(nome);
-    const detalhe = [i.detalhe, cidades.length > 1 ? i.municipio : ""].filter(Boolean).join(" · ");
-    if (detalhe) li.append(elemento("span", "instituicoes-detalhe", detalhe));
-    const contato = [i.endereco, i.telefone ? `Tel. ${i.telefone}` : ""].filter(Boolean).join(" · ");
-    if (contato) li.append(elemento("span", "instituicoes-detalhe", contato));
-    ul.append(li);
+    if (i.grupo && i.grupo !== atual) {
+      atual = i.grupo;
+      const quantas = itens.filter((x) => x.grupo === atual).length;
+      ul.append(elemento("li", "instituicoes-subgrupo", `${atual} (${quantas})`));
+    }
+    ul.append(itemInstituicao(i, municipio));
   }
   grupo.append(ul);
   return grupo;
 }
 
-/** Instituições das cidades da comarca: primeiro as ligadas às matérias das promotorias escolhidas
- * (escolas, saúde, assistência social, presídio, acolhimento...); as outras, numa parte recolhida
- * logo abaixo, para nada da comarca ficar de fora. Bases oficiais, em dados/instituicoes.json. */
+/** Instituições da comarca, cidade por cidade: primeiro os tipos ligados às matérias das
+ * promotorias escolhidas; os outros, numa parte recolhida, para nada da cidade ficar de fora.
+ * Bases oficiais, em dados/instituicoes.json. */
 function painelInstituicoes(dados, perfil) {
   const painel = elemento("section", "painel secao instituicoes");
   painel.style.setProperty("--cor", "#5f3dc4");
@@ -764,28 +801,31 @@ function painelInstituicoes(dados, perfil) {
     painel.append(elemento("p", "vazio", "A lista de instituições da comarca ainda não está disponível."));
     return painel;
   }
-  const cidades = Object.keys(inst.municipios);
   const minhas = new Set(perfil.materias);
   const ligadas = inst.tipos.filter((t) => perfil.plena || t.materias.some((m) => minhas.has(m)));
   const outras = inst.tipos.filter((t) => !ligadas.includes(t));
   const dono = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
   painel.append(elemento("p", "nota nota-local",
-    `${cidades.length > 1 ? `Em ${juntarNomes(cidades)}, ligadas` : "Ligadas"} às matérias ${dono}. Clique num tipo para ver a lista; cada nome abre no mapa.`));
-  if (ligadas.length) {
+    `Por cidade, primeiro as ligadas às matérias ${dono}. Clique num tipo para ver a lista e no nome de uma instituição para ver o endereço, o telefone e o mapa.`));
+  for (const [municipio, porTipo] of Object.entries(inst.municipios)) {
+    const cidade = elemento("section", "instituicoes-cidade");
+    cidade.append(elemento("h3", "", municipio));
+    const comItens = (tipos) => tipos.filter((t) => porTipo[t.id]?.length);
     const grade = elemento("div", "instituicoes-grade");
-    ligadas.forEach((t) => grade.append(grupoInstituicoes(t, inst, cidades, perfil)));
-    painel.append(grade);
-  } else {
-    painel.append(elemento("p", "vazio", "Nenhum tipo de instituição da lista está ligado às suas matérias."));
-  }
-  if (outras.length) {
-    const total = outras.reduce((soma, t) => soma + cidades.reduce((n, c) => n + (inst.municipios[c][t.id] || []).length, 0), 0);
-    const demais = elemento("details", "instituicoes-outras");
-    demais.append(elemento("summary", "", `Outras instituições da comarca, fora das suas matérias (${total})`));
-    const grade = elemento("div", "instituicoes-grade");
-    outras.forEach((t) => grade.append(grupoInstituicoes(t, inst, cidades, perfil)));
-    demais.append(grade);
-    painel.append(demais);
+    comItens(ligadas).forEach((t) => grade.append(grupoInstituicoes(t, porTipo[t.id], municipio, perfil)));
+    if (grade.childElementCount) cidade.append(grade);
+    else cidade.append(elemento("p", "vazio", "Nenhuma instituição ligada às suas matérias registrada nas bases oficiais."));
+    const fora = comItens(outras);
+    if (fora.length) {
+      const total = fora.reduce((soma, t) => soma + porTipo[t.id].length, 0);
+      const demais = elemento("details", "instituicoes-outras");
+      demais.append(elemento("summary", "", `Outras instituições de ${municipio}, fora das suas matérias (${total})`));
+      const gradeOutras = elemento("div", "instituicoes-grade");
+      fora.forEach((t) => gradeOutras.append(grupoInstituicoes(t, porTipo[t.id], municipio, perfil)));
+      demais.append(gradeOutras);
+      cidade.append(demais);
+    }
+    painel.append(cidade);
   }
   const fontes = Object.values(inst.fontes || {});
   if (fontes.length) painel.append(elemento("p", "nota instituicoes-fontes", `Fontes: ${fontes.join("; ")}.`));
@@ -1541,6 +1581,44 @@ async function carregarCotacoes() {
     await carregarIntradia();
     [...MOEDAS, ...CRIPTOS].forEach(preencherVariacoes);
   } catch { /* fica com a variação diária */ }
+}
+
+// --- Abas: Brasil e Mundo, Sua região, MPGO e Jurisprudência ---
+
+const ABAS = ["brasil", "regiao", "mpgo", "jurisprudencia"];
+
+function mostrarAba(aba, rolar = false) {
+  if (!ABAS.includes(aba)) aba = ABAS[0];
+  for (const painel of document.querySelectorAll("[data-aba]")) painel.hidden = painel.dataset.aba !== aba;
+  for (const botao of document.querySelectorAll("#abas button")) {
+    const ativa = botao.dataset.alvo === aba;
+    botao.classList.toggle("ativo", ativa);
+    botao.setAttribute("aria-selected", String(ativa));
+  }
+  try {
+    localStorage.setItem("aba", aba);
+  } catch { /* sem localStorage: vale só nesta visita */ }
+  if (location.hash !== `#${aba}`) history.replaceState(null, "", `#${aba}`);
+  // Os gráficos desenhados com a aba escondida ficam sem largura: redesenha ao mostrar
+  if (aba === "brasil" && window.Plotly) {
+    document.querySelectorAll("#aba-brasil .js-plotly-plot").forEach((g) => Plotly.Plots.resize(g));
+  }
+  if (rolar) document.getElementById("abas").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.getElementById("abas").addEventListener("click", (evento) => {
+  const botao = evento.target.closest("button[data-alvo]");
+  if (botao) mostrarAba(botao.dataset.alvo, true);
+});
+window.addEventListener("hashchange", () => mostrarAba(location.hash.slice(1)));
+{
+  let inicial = location.hash.slice(1);
+  if (!ABAS.includes(inicial)) {
+    try {
+      inicial = localStorage.getItem("aba") || "";
+    } catch { /* sem localStorage */ }
+  }
+  mostrarAba(inicial);
 }
 
 carregarNoticias();

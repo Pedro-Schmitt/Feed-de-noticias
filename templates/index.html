@@ -57,6 +57,14 @@
       <div id="promotoria-escolhida" hidden></div>
     </section>
 
+    <nav id="abas" class="abas" role="tablist" aria-label="Partes da revista">
+      <button type="button" role="tab" data-alvo="brasil">Brasil e Mundo</button>
+      <button type="button" role="tab" data-alvo="regiao">Sua região</button>
+      <button type="button" role="tab" data-alvo="mpgo">MPGO</button>
+      <button type="button" role="tab" data-alvo="jurisprudencia">Jurisprudência relativa à sua atuação</button>
+    </nav>
+
+    <div id="aba-brasil" class="aba" data-aba="brasil" role="tabpanel">
     <section class="area" id="area-gerais" style="--cor-area: #2f6fdb">
       <header class="area-cabecalho">
         <div>
@@ -66,42 +74,11 @@
       <div id="secoes" class="secoes"></div>
     </section>
 
-    <section class="area" id="area-regiao" style="--cor-area: #0f9d58">
-      <header class="area-cabecalho">
-        <div>
-          <h2>Notícias específicas da sua região</h2>
-          <p id="nota-regiao" class="nota">Notícias da comarca e da região da promotoria escolhida acima, o radar de acontecimentos, as câmaras municipais e as instituições a acompanhar.</p>
-        </div>
-      </header>
-      <div id="regional" class="secoes"></div>
-    </section>
-
-    <section class="area" id="area-jurisprudencia" style="--cor-area: #d6336c">
-      <header class="area-cabecalho">
-        <div>
-          <h2>Jurisprudência, entendimentos e legislação</h2>
-          <p class="nota">Últimos informativos do STF e do STJ, direto do site de cada tribunal, com os julgados de interesse de sua atuação e o link da versão comentada do Dizer o Direito quando já publicada; os atos normativos mais recentes do CNMP e do CNJ; e as leis federais e de Goiás novas.</p>
-        </div>
-        <div id="filtro-jurisprudencia" class="alternador" role="group" aria-label="Quais julgados mostrar" hidden>
-          <button type="button" data-filtro="promotoria" class="ativo">Pertinentes às minhas atribuições</button>
-          <button type="button" data-filtro="todos">Todos de interesse do MP</button>
-        </div>
-      </header>
-      <div id="informativos" class="secoes"></div>
-
-      <h3 class="subtitulo-area">Entendimentos do CNMP e do CNJ</h3>
-      <p class="nota">Resoluções, recomendações, enunciados e provimentos mais recentes de cada conselho, lidos nos sites oficiais. Os atos do CNMP sobre a carreira e o funcionamento do MP valem para todo membro e aparecem sempre.</p>
-      <div id="conselhos" class="secoes"></div>
-
-      <h3 class="subtitulo-area">Novidades legislativas</h3>
-      <p class="nota" id="nota-legislacao">Leis federais e de Goiás recentes, pelas ementas.</p>
-      <div id="legislacao" class="secoes"></div>
-    </section>
-
     <section class="area" id="area-noticias" style="--cor-area: #2f6fdb">
       <header class="area-cabecalho">
         <div>
           <h2>Notícias jurídicas e agendas</h2>
+          <p class="nota">As notícias e a agenda do MPGO e do CSMP ficam na aba MPGO.</p>
         </div>
       </header>
 
@@ -149,6 +126,55 @@
       <div id="graficos-moedas" class="grade grade-2"></div>
       <div id="graficos-cripto" class="grade grade-4"></div>
     </section>
+    </div>
+
+    <div id="aba-regiao" class="aba" data-aba="regiao" role="tabpanel" hidden>
+    <section class="area" id="area-regiao" style="--cor-area: #0f9d58">
+      <header class="area-cabecalho">
+        <div>
+          <h2>Notícias específicas da sua região</h2>
+          <p id="nota-regiao" class="nota">Notícias da comarca e da região da promotoria escolhida acima, o radar de acontecimentos, as câmaras municipais e as instituições a acompanhar.</p>
+        </div>
+      </header>
+      <div id="regional" class="secoes"></div>
+    </section>
+    </div>
+
+    <div id="aba-mpgo" class="aba" data-aba="mpgo" role="tabpanel" hidden>
+    <section class="area" id="area-mpgo" style="--cor-area: #8b5cf6">
+      <header class="area-cabecalho">
+        <div>
+          <h2>MPGO</h2>
+          <p class="nota">Notícias do MPGO, editais de promoção e remoção com inscrições abertas, o Conselho Superior (CSMP) com notícias e a pauta das sessões e os próximos cursos e eventos da Escola Superior (ESUMP).</p>
+        </div>
+      </header>
+      <div id="mpgo" class="grade-juridico"></div>
+    </section>
+    </div>
+
+    <div id="aba-jurisprudencia" class="aba" data-aba="jurisprudencia" role="tabpanel" hidden>
+    <section class="area" id="area-jurisprudencia" style="--cor-area: #d6336c">
+      <header class="area-cabecalho">
+        <div>
+          <h2>Jurisprudência relativa à sua atuação</h2>
+          <p class="nota">Últimos informativos do STF e do STJ comentados pelo Dizer o Direito, com os julgados de interesse de sua atuação (e o aviso dos já publicados pelos tribunais e ainda não comentados); os atos normativos mais recentes do CNMP e do CNJ; e as leis federais e de Goiás novas.</p>
+        </div>
+        <div id="filtro-jurisprudencia" class="alternador" role="group" aria-label="Quais julgados mostrar" hidden>
+          <button type="button" data-filtro="promotoria" class="ativo">Pertinentes às minhas atribuições</button>
+          <button type="button" data-filtro="todos">Todos de interesse do MP</button>
+        </div>
+      </header>
+      <div id="informativos" class="secoes"></div>
+
+      <h3 class="subtitulo-area">Entendimentos do CNMP e do CNJ</h3>
+      <p class="nota">Resoluções, recomendações, enunciados e provimentos mais recentes de cada conselho, lidos nos sites oficiais. Os atos do CNMP sobre a carreira e o funcionamento do MP valem para todo membro e aparecem sempre.</p>
+      <div id="conselhos" class="secoes"></div>
+
+      <h3 class="subtitulo-area">Novidades legislativas</h3>
+      <p class="nota" id="nota-legislacao">Leis federais e de Goiás recentes, pelas ementas.</p>
+      <div id="legislacao" class="secoes"></div>
+    </section>
+    </div>
   </main>
 
   <footer>
@@ -157,7 +183,7 @@
     As principais são os assuntos noticiados por mais veículos; os títulos e resumos são dos próprios veículos.
     Notícias jurídicas: buscas no Google Notícias sobre STF, STJ, TJGO, Ministério Público, Ministério Público de Goiás (MPGO) e o Conselho Superior do MPGO (CSMP).
     Notícias da sua região: buscas no Google Notícias pela cidade da comarca e pelos municípios da região geográfica imediata do IBGE; promotorias e comarcas da lista oficial do MPGO.
-    Informativos: sites do STF e do STJ; versões comentadas do Dizer o Direito. Atos normativos: sites do CNMP e do CNJ.
+    Informativos: Dizer o Direito (comentados) e sites do STF e do STJ (aviso dos ainda não comentados). Atos normativos: sites do CNMP e do CNJ.
     Legislação: dados abertos do Senado Federal (leis federais, com o texto no Planalto) e Legisla, da Casa Civil de Goiás.
     Cursos e eventos: página da Escola Superior (ESUMP) no portal do MPGO.
     Instituições: Censo Escolar (INEP), CNES (Ministério da Saúde), SISDEPEN (Senappen) e Censo SUAS (MDS).
