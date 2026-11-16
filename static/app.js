@@ -313,19 +313,19 @@ function montarJuridico() {
     paineis[orgao.id] = painel;
     container.append(painel);
   }
-  // O MPGO ocupa a linha inteira em três colunas: notícias, editais e o quadro do CSMP
+  // O MPGO ocupa a linha inteira em três colunas (notícias, editais e cursos da ESUMP), com o CSMP embaixo
   const { mpgo, csmp } = paineis;
   if (mpgo) {
     mpgo.classList.add("painel-mpgo");
     const principal = elemento("div", "mpgo-principal");
     principal.append(...[...mpgo.children].slice(1)); // tudo menos o título
     const colunas = elemento("div", "mpgo-colunas");
-    colunas.append(principal, blocoEditais(noticias.editais));
+    colunas.append(principal, blocoEditais(noticias.editais), blocoEsump(noticias.esump));
+    mpgo.append(colunas);
     if (csmp) {
-      csmp.classList.add("painel-interno");
-      colunas.append(csmp);
+      csmp.classList.add("painel-interno", "csmp-embaixo");
+      mpgo.append(csmp);
     }
-    mpgo.append(colunas, blocoEsump(noticias.esump));
     document.getElementById("mpgo").replaceChildren(mpgo);
   }
   preencherAgendas();
@@ -744,6 +744,19 @@ const MOTIVOS_MATERIA = {
 };
 
 
+// Os números das bases oficiais vêm com a fonte e o aviso de que podem conter erro
+const AVISO_DADOS = "Dado de base oficial, que pode conter erro: depende de confirmação pelo Promotor de Justiça.";
+
+/** Texto de "passar o mouse": as linhas, a fonte e o aviso (\n no title; <br> nos gráficos). */
+function dica(linhas, fonte, quebra = "\n") {
+  return [...linhas, fonte && `Fonte: ${fonte}`, AVISO_DADOS].filter(Boolean).join(quebra);
+}
+
+/** Linha da fonte e do aviso no fim do texto de um gráfico (Plotly). */
+function rodapeGrafico(fonte) {
+  return `<br><span style="font-size:11px">Fonte: ${fonte}<br>Pode conter erro: confirme antes de usar.</span>`;
+}
+
 const ETAPAS_CURTAS = { "Anos iniciais": "anos iniciais", "Anos finais": "anos finais", "Ensino médio": "ensino médio" };
 
 function chaveNome(nome) {
@@ -759,19 +772,21 @@ function selosInstituicao(tipo, i, municipio, ctx) {
     const seta = n.anterior == null ? "" : n.valor > n.anterior ? " ▲" : n.valor < n.anterior ? " ▼" : "";
     selos.push([`IDEB ${ETAPAS_CURTAS[n.etapa] || n.etapa} ${numeroBr(n.valor, 1)}${seta}`,
       mediana == null ? "" : n.valor >= mediana ? "bom" : "ruim",
-      `IDEB ${n.ano}, ${n.etapa.toLowerCase()}: ${numeroBr(n.valor, 1)}` +
-      (n.anterior != null ? ` (edição anterior: ${numeroBr(n.anterior, 1)})` : "") +
-      (mediana != null ? ` · mediana das escolas públicas de Goiás: ${numeroBr(mediana, 1)}` : "")]);
+      dica([`IDEB ${n.ano}, ${n.etapa.toLowerCase()}: ${numeroBr(n.valor, 1)}` +
+        (n.anterior != null ? ` (edição anterior: ${numeroBr(n.anterior, 1)})` : ""),
+        mediana != null ? `Mediana das escolas públicas de Goiás: ${numeroBr(mediana, 1)}` : ""].filter(Boolean),
+        `IDEB ${n.ano} (INEP)`)]);
   }
   if (i.lotacao?.vagas) {
     const pct = (i.lotacao.ocupados / i.lotacao.vagas) * 100;
     selos.push([`${numeroBr(pct)}% de lotação`, pct > 100 ? "ruim" : pct >= 85 ? "alerta" : "bom",
-      `${numeroBr(i.lotacao.ocupados)} ${tipo === "prisionais" ? "presos" : "acolhidos"} para ${numeroBr(i.lotacao.vagas)} vagas`]);
+      dica([`${numeroBr(i.lotacao.ocupados)} ${tipo === "prisionais" ? "presos" : "acolhidos"} para ${numeroBr(i.lotacao.vagas)} vagas`],
+        tipo === "prisionais" ? ctx.fontes?.prisionais || "SISDEPEN (Senappen)" : ctx.fontes?.assistencia || "Censo SUAS (MDS)")]);
   }
   const h = tipo === "saude" ? ctx.hospitais?.[municipio]?.get(chaveNome(i.nome)) : null;
   if (h) {
     selos.push([`${h.leitos} leitos · ${h.sus} SUS${h.uti ? ` · ${h.uti} UTI` : ""}`, "",
-      `Leitos (CNES): ${h.leitos}, ${h.sus} do SUS · UTI: ${h.uti} (${h.uti_sus} do SUS)`]);
+      dica([`Leitos: ${h.leitos}, ${h.sus} do SUS`, `UTI: ${h.uti} (${h.uti_sus} do SUS)`], "CNES, Ministério da Saúde (hospitais e leitos)")]);
   }
   return selos;
 }
@@ -792,7 +807,9 @@ function linhaSaudeMunicipio(municipio, ctx) {
     const valor = elemento("strong", ref == null ? "" : dado.valor > ref ? "ruim" : "bom", numeroBr(dado.valor, 1));
     p.append(`${nome}: `, valor, ` ${unidade} (${dado.ano}${ref != null ? `; Goiás: ${numeroBr(ref, 1)}` : ""})`);
   }
-  return p.childNodes.length ? p : null;
+  if (!p.childNodes.length) return null;
+  p.title = dica([], ctx.ind?.fontes?.saude || "IBGE Cidades");
+  return p;
 }
 
 /** Uma instituição: o nome abre o endereço completo, o telefone e o link do mapa. */
@@ -877,7 +894,7 @@ function painelInstituicoes(dados, perfil) {
     hospitais[municipio] = new Map();
     for (const h of m.hospitais || []) if (!hospitais[municipio].has(chaveNome(h.nome))) hospitais[municipio].set(chaveNome(h.nome), h);
   }
-  const ctx = { medianas: inst.ideb_goias, ind, hospitais };
+  const ctx = { medianas: inst.ideb_goias, ind, hospitais, fontes: inst.fontes };
   const minhas = new Set(perfil.materias);
   const ligadas = inst.tipos.filter((t) => perfil.plena || t.materias.some((m) => minhas.has(m)));
   const outras = inst.tipos.filter((t) => !ligadas.includes(t));
@@ -1010,8 +1027,11 @@ function blocoViolencia(ind) {
   const taxaComarca = taxa(ultimos(cvli), populacao);
   const taxaGo = taxa(ultimos(cvliGo), ind.goias.populacao);
   const resumo = elemento("div", "retrato-cartoes");
+  const fonteViolencia = ind.fontes?.violencia || "SINESP VDE (Ministério da Justiça)";
+  const fontePopulacao = ind.fontes?.populacao || "IBGE";
   const cartao = (rotulo, valor, sub, classe = "") => {
     const c = elemento("div", `retrato-cartao ${classe}`);
+    c.title = dica([`${rotulo}: ${valor} (${sub})`], rotulo.startsWith("Taxa") ? `${fonteViolencia}; população: ${fontePopulacao}` : fonteViolencia);
     c.append(elemento("span", "retrato-cartao-rotulo", rotulo), elemento("strong", "", valor), elemento("span", "retrato-cartao-sub", sub));
     return c;
   };
@@ -1039,7 +1059,7 @@ function blocoViolencia(ind) {
       marker: { line: { color: escuro ? "#0d1117" : "#ffffff", width: 1.5 } },
       text: comGeo.map(([nome, m]) => `<b>${nome}</b><br>${numeroBr(n12(m))} mortes violentas em 12 meses<br>` +
         `${numeroBr(taxa(n12(m), m.populacao), 1)} por 100 mil hab. (Goiás: ${numeroBr(taxaGo, 1)})<br>` +
-        `População: ${numeroBr(m.populacao || 0)}`),
+        `População: ${numeroBr(m.populacao || 0)}` + rodapeGrafico(`${fonteViolencia}; ${fontePopulacao}`)),
       hovertemplate: "%{text}<extra></extra>",
       colorbar: { title: { text: "CVLI/100 mil", side: "right" }, thickness: 12, len: 0.8, tickfont: { color: corSuave } },
     }, {
@@ -1066,7 +1086,7 @@ function blocoViolencia(ind) {
       type: "bar", name: evento, marker: { color: CORES_VIOLENCIA[evento] },
       x: anos.map(rotuloAno),
       y: anos.map((a) => somar(serie.filter((_, i) => meses[i].startsWith(a)))),
-      hovertemplate: `${evento}: %{y}<extra>%{x}</extra>`,
+      hovertemplate: `${evento}: %{y}${rodapeGrafico(fonteViolencia)}<extra>%{x}</extra>`,
     };
   }), {
     barmode: "stack", title: { text: "Mortes violentas por ano, na comarca", font: { size: 14 } },
@@ -1077,6 +1097,7 @@ function blocoViolencia(ind) {
 
   // Tabela: cada tipo, últimos 12 meses × 12 anteriores, taxa da comarca × Goiás
   const tabela = elemento("table", "retrato-tabela");
+  tabela.title = dica([], `${fonteViolencia}; população: ${fontePopulacao}`);
   const cab = elemento("tr");
   ["Evento", "12 meses", "12 anteriores", "Tendência", "Por 100 mil", "Goiás"].forEach((t) => cab.append(elemento("th", "", t)));
   tabela.append(elemento("thead"));
@@ -1110,7 +1131,6 @@ function blocoViolencia(ind) {
   return bloco;
 }
 
-/** Ocupação das unidades com vagas: presídios, acolhimento de crianças e adolescentes e de idosos. */
 /** Violência na comarca, abaixo das instituições (a qualidade e a lotação de cada instituição
  * aparecem nela mesma, na lista). */
 function painelRetrato(dados) {
@@ -1233,8 +1253,9 @@ function mostrarPromotorias() {
     }
     extras.append(lista);
   }
-  const botao = elemento("button", "botao-outra", "Respondendo por mais de uma promotoria? Selecione outro órgão:");
+  const botao = elemento("button", "botao-outra", "+ Responde por outra promotoria?");
   botao.type = "button";
+  botao.title = "Acumulação ou substituição: some outra promotoria às notícias e aos informativos";
   const seletor = elemento("div", "seletor-outra");
   seletor.hidden = true;
   const campo = elemento("input");
@@ -1247,6 +1268,7 @@ function mostrarPromotorias() {
   seletor.append(campo, avisoOutra);
   botao.addEventListener("click", () => {
     seletor.hidden = !seletor.hidden;
+    extras.hidden = !outras.length && seletor.hidden;
     if (!seletor.hidden) campo.focus();
   });
   const adicionar = () => {
@@ -1265,7 +1287,9 @@ function mostrarPromotorias() {
   };
   campo.addEventListener("change", adicionar);
   campo.addEventListener("keydown", (e) => { if (e.key === "Enter") adicionar(); });
-  extras.append(botao, seletor);
+  extras.append(seletor);
+  extras.hidden = !outras.length;
+  document.getElementById("acao-outra").replaceChildren(botao);
 
   cartao.style.setProperty("--cor", "#6b7f99");
   cartao.replaceChildren(titulo, comarca, materias, atribuicao, aviso, extras);
@@ -1281,6 +1305,7 @@ function aplicarPromotorias() {
 function pedirPromotoria() {
   document.getElementById("promotoria-escolhida").hidden = true;
   document.getElementById("trocar-promotoria").hidden = true;
+  document.getElementById("acao-outra").replaceChildren();
   document.getElementById("seletor-promotoria").hidden = false;
   document.getElementById("nota-promotoria").textContent =
     "Escolha a sua Promotoria de Justiça para ver as notícias da sua região e os informativos ligados às suas atribuições. A escolha fica salva neste navegador.";
@@ -1990,6 +2015,7 @@ function resumoRegiao() {
       const taxa = pop ? (doze / pop) * 100000 : 0;
       const taxaGo = (somar(cvliGo.slice(-12)) / ind.goias.populacao) * 100000;
       const li = elemento("li");
+      li.title = dica([], `${ind.fontes?.violencia || "SINESP VDE"}; população: ${ind.fontes?.populacao || "IBGE"}`);
       li.append(elemento("strong", "", `${numeroBr(doze)} mortes violentas`), ` em 12 meses (até ${mesBr(ind.meses[ind.meses.length - 1])}) · `,
         elemento("span", v.classe, v.texto === "—" ? "sem casos" : v.texto), ` · ${numeroBr(taxa, 1)} por 100 mil hab. (Goiás: ${numeroBr(taxaGo, 1)})`);
       numeros.append(li);
@@ -2001,12 +2027,13 @@ function resumoRegiao() {
         for (const tipo of ["prisionais", "acolhimento", "idosos"]) {
           for (const i of porTipo[tipo] || []) {
             const pct = i.lotacao?.vagas ? (i.lotacao.ocupados / i.lotacao.vagas) * 100 : 0;
-            if (pct > 100) lotadas.push({ ...i, municipio, pct });
+            if (pct > 100) lotadas.push({ ...i, municipio, pct, tipo });
           }
         }
       }
       for (const u of lotadas.sort((a, b) => b.pct - a.pct).slice(0, 3)) {
         const li = elemento("li");
+        li.title = dica([], u.tipo === "prisionais" ? inst.fontes?.prisionais : inst.fontes?.assistencia);
         li.append(elemento("strong", "piora", `${numeroBr(u.pct)}% de lotação`), ` · ${u.nome} (${u.municipio}): ${u.lotacao.ocupados} para ${u.lotacao.vagas} vagas`);
         numeros.append(li);
       }

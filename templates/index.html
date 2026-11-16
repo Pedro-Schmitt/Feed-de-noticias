@@ -45,7 +45,10 @@
           <h2>Sua Promotoria de Justiça</h2>
           <p id="nota-promotoria" class="nota">Carregando a lista de promotorias…</p>
         </div>
-        <button type="button" id="trocar-promotoria" class="botao-trocar" hidden>Trocar promotoria</button>
+        <div class="acoes-promotoria">
+          <button type="button" id="trocar-promotoria" class="botao-trocar" hidden>Trocar promotoria</button>
+          <div id="acao-outra"></div>
+        </div>
       </header>
       <div id="seletor-promotoria" class="seletor-promotoria" hidden>
         <label for="campo-promotoria">Selecione a Promotoria de Justiça onde você trabalha</label>
@@ -62,7 +65,7 @@
       <button type="button" role="tab" data-alvo="brasil">Brasil e Mundo</button>
       <button type="button" role="tab" data-alvo="regiao">Sua região</button>
       <button type="button" role="tab" data-alvo="mpgo">MPGO</button>
-      <button type="button" role="tab" data-alvo="jurisprudencia">Jurisprudência relativa à sua atuação</button>
+      <button type="button" role="tab" data-alvo="jurisprudencia">Novidades Legislativas e Jurisprudência</button>
     </nav>
 
     <div id="aba-resumo" class="aba" data-aba="resumo" role="tabpanel">
@@ -158,7 +161,7 @@
       <header class="area-cabecalho">
         <div>
           <h2>MPGO</h2>
-          <p class="nota">Notícias do MPGO, editais de promoção e remoção com inscrições abertas, o Conselho Superior (CSMP) com notícias e a pauta das sessões e os próximos cursos e eventos da Escola Superior (ESUMP).</p>
+          <p class="nota">Notícias do MPGO, editais de promoção e remoção com inscrições abertas, os próximos cursos e eventos da Escola Superior (ESUMP) e o Conselho Superior (CSMP) com notícias e a pauta das sessões.</p>
         </div>
       </header>
       <div id="mpgo" class="grade-juridico"></div>
@@ -169,23 +172,24 @@
     <section class="area" id="area-jurisprudencia" style="--cor-area: #d6336c">
       <header class="area-cabecalho">
         <div>
-          <h2>Jurisprudência relativa à sua atuação</h2>
-          <p class="nota">Últimos informativos do STF e do STJ comentados pelo Dizer o Direito, com os julgados de interesse de sua atuação (e o aviso dos já publicados pelos tribunais e ainda não comentados); os atos normativos mais recentes do CNMP e do CNJ; e as leis federais e de Goiás novas.</p>
+          <h2>Novidades Legislativas e Jurisprudência</h2>
+          <p class="nota">As leis federais e de Goiás novas; os últimos informativos do STF e do STJ comentados pelo Dizer o Direito, com os julgados de interesse de sua atuação (e o aviso dos já publicados pelos tribunais e ainda não comentados); e os atos normativos mais recentes do CNMP e do CNJ.</p>
         </div>
         <div id="filtro-jurisprudencia" class="alternador" role="group" aria-label="Quais julgados mostrar" hidden>
           <button type="button" data-filtro="promotoria" class="ativo">Pertinentes às minhas atribuições</button>
           <button type="button" data-filtro="todos">Todos de interesse do MP</button>
         </div>
       </header>
+      <h3 class="subtitulo-area">Novidades legislativas</h3>
+      <p class="nota" id="nota-legislacao">Leis federais e de Goiás recentes, pelas ementas.</p>
+      <div id="legislacao" class="secoes"></div>
+
+      <h3 class="subtitulo-area">Informativos de jurisprudência</h3>
       <div id="informativos" class="secoes"></div>
 
       <h3 class="subtitulo-area">Entendimentos do CNMP e do CNJ</h3>
       <p class="nota">Resoluções, recomendações, enunciados e provimentos mais recentes de cada conselho, lidos nos sites oficiais. Os atos do CNMP sobre a carreira e o funcionamento do MP valem para todo membro e aparecem sempre.</p>
       <div id="conselhos" class="secoes"></div>
-
-      <h3 class="subtitulo-area">Novidades legislativas</h3>
-      <p class="nota" id="nota-legislacao">Leis federais e de Goiás recentes, pelas ementas.</p>
-      <div id="legislacao" class="secoes"></div>
     </section>
     </div>
   </main>

@@ -791,8 +791,15 @@ footer { padding-bottom: 24px; }
   font: inherit; font-size: 0.85rem; padding: 6px 14px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--borda); background: var(--painel); color: var(--texto);
 }
-.botao-outra { align-self: flex-start; border-style: dashed; color: var(--destaque); font-weight: 600; }
-.botao-outra:hover, .botao-remover:hover { border-color: var(--suave); }
+.botao-remover:hover { border-color: var(--suave); }
+/* Discreto, abaixo de "Trocar promotoria" */
+.acoes-promotoria { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.botao-outra {
+  border: 0; background: none; padding: 2px 4px; border-radius: 6px;
+  font-size: 0.78rem; font-weight: 500; color: var(--suave);
+}
+.botao-outra:hover { color: var(--texto); text-decoration: underline; }
+.outras-promotorias[hidden] { display: none; }
 .botao-remover { flex: none; font-size: 0.8rem; padding: 4px 12px; }
 .seletor-outra { display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
 .seletor-outra[hidden] { display: none; }
@@ -986,3 +993,10 @@ a.resumo-titulo:hover { text-decoration: underline; }
 .instituicoes-indicadores { margin: -2px 0 8px; font-size: 0.75rem; color: var(--suave); line-height: 1.45; }
 .instituicoes-indicadores .ruim { color: #d9480f; }
 .instituicoes-indicadores .bom { color: #2f9e44; }
+
+/* MPGO: cursos da ESUMP como terceira coluna e o CSMP embaixo, na linha inteira */
+.mpgo-colunas > .esump { margin-top: 0; padding-top: 0; border-top: 0; display: flex; flex-direction: column; }
+.mpgo-colunas > .esump .esump-lista { grid-template-columns: 1fr; flex: 1 1 0; min-height: 200px; contain: size; overflow-y: auto; align-content: start; }
+.painel-mpgo > .csmp-embaixo { margin-top: 20px; }
+/* Números com fonte e aviso ao passar o mouse */
+.selo-instituicao[title], .instituicoes-indicadores[title], .retrato-cartao[title], .resumo-numeros li[title] { cursor: help; }
