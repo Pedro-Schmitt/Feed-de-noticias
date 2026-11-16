@@ -135,21 +135,24 @@ def _categoria_pela_url(link):
 
 
 def _imagem(item):
+    """(imagem, veio_do_texto). A foto que o feed declara (media:content, enclosure, imagem-destaque)
+    é a da notícia; a primeira <img> do texto pode ser de outra matéria linkada nele, então é só
+    provisória: completar_imagens troca pela imagem de compartilhamento da página."""
     for caminho in ("media:content", "media:thumbnail", "enclosure"):
         no = item.find(caminho, NS)
         if no is not None and no.get("url") and no.get("medium", "image") == "image":
             if caminho != "enclosure" or no.get("type", "").startswith("image"):
                 url = no.get("url")
                 # A BBC manda miniaturas de 240px; a mesma imagem existe em 480px
-                return url.replace("/ace/ws/240/", "/ace/ws/480/")
+                return url.replace("/ace/ws/240/", "/ace/ws/480/"), False
     destaque = _texto(item, "imagem-destaque")  # Agência Brasil
     if destaque:
-        return destaque
+        return destaque, False
     for caminho in ("description", "content:encoded"):
         achou = re.search(r'<img[^>]+src="(https://[^"]+)"', item.findtext(caminho, "", NS) or "")
         if achou:
-            return html.unescape(achou.group(1))
-    return None
+            return html.unescape(achou.group(1)), True
+    return None, False
 
 
 def _data(item):
@@ -196,6 +199,7 @@ def buscar_feed(veiculo, categoria, url):
             or _sem_html(_texto(item, "description"))
             or _sem_html(_texto(item, "content:encoded"))
         )
+        imagem, imagem_do_texto = _imagem(item)
         noticias.append({
             "titulo": titulo,
             "resumo": _resumir(resumo),
@@ -203,7 +207,8 @@ def buscar_feed(veiculo, categoria, url):
             "fonte": veiculo,
             "categoria": categoria_noticia,
             "data": data.isoformat(timespec="seconds"),
-            "imagem": _imagem(item),
+            "imagem": imagem,
+            "imagem_do_texto": imagem_do_texto,
         })
         if len(noticias) >= MAX_POR_FEED:
             break
@@ -364,11 +369,16 @@ def _imagem_da_pagina(link):
 
 
 def completar_imagens(secoes):
-    """Busca na página da notícia a imagem das que não vieram com foto."""
-    sem_imagem = [n for secao in secoes for n in secao["noticias"] if not n.get("imagem")]
+    """Busca na página da notícia a imagem das que não vieram com foto e das que só tinham a
+    primeira <img> do texto do feed (que pode ser de outra matéria); se a página não responder,
+    fica a do texto."""
+    todas = [n for secao in secoes for n in secao["noticias"]]
+    buscar = [n for n in todas if not n.get("imagem") or n.get("imagem_do_texto")]
     with ThreadPoolExecutor(max_workers=8) as executor:
-        for noticia, imagem in zip(sem_imagem, executor.map(lambda n: _imagem_da_pagina(n["link"]), sem_imagem)):
-            noticia["imagem"] = imagem
+        for noticia, imagem in zip(buscar, executor.map(lambda n: _imagem_da_pagina(n["link"]), buscar)):
+            noticia["imagem"] = imagem or noticia.get("imagem")
+    for noticia in todas:
+        noticia.pop("imagem_do_texto", None)
 
 
 # --- Notícias jurídicas: buscas no Google Notícias, que junta sites oficiais e imprensa ---
