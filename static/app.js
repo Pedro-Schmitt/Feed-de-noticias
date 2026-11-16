@@ -198,7 +198,11 @@ function blocoEditais(dados) {
     const prazo = fins.length === 1
       ? `inscrições até ${dataCurta(fins[0])}`
       : `inscrições até ${dataCurta(fins[0])} a ${dataCurta(fins[fins.length - 1])}`;
-    bloco.append(elemento("p", "editais-resumo", `${abertos.length} ${abertos.length === 1 ? "edital aberto" : "editais abertos"} · ${prazo}`));
+    const desistencias = [...new Set(abertos.map((e) => e.desistencia).filter(Boolean))].sort();
+    const prazoDesistencia = !desistencias.length ? ""
+      : desistencias.length === 1 ? ` · desistências até ${dataCurta(desistencias[0])}`
+        : ` · desistências até ${dataCurta(desistencias[0])} a ${dataCurta(desistencias[desistencias.length - 1])}`;
+    bloco.append(elemento("p", "editais-resumo", `${abertos.length} ${abertos.length === 1 ? "edital aberto" : "editais abertos"} · ${prazo}${prazoDesistencia}`));
 
     const lista = elemento("div", "editais-lista");
     for (const entrancia of ORDEM_ENTRANCIAS.concat(abertos.map((e) => e.entrancia))) {
@@ -211,18 +215,23 @@ function blocoEditais(dados) {
       for (const e of doGrupo) {
         const li = elemento("li");
         const vaga = linkExterno(e.link, e.vaga || `Edital ${e.numero}`);
-        vaga.title = `Edital n. ${e.numero} · publicado em ${dataCurta(e.publicado)} · inscrições até ${dataCurta(e.fim)}`;
+        vaga.title = `Edital n. ${e.numero} · publicado em ${dataCurta(e.publicado)} · inscrições até ${dataCurta(e.fim)}` +
+          (e.desistencia ? ` · desistência até ${dataCurta(e.desistencia)} (estimada)` : "");
         const detalhe = elemento("span", "edital-criterio", e.criterio + (e.subsidiario ? ` (subsidiário: ${e.subsidiario.toLowerCase()})` : ""));
         li.append(vaga, detalhe);
         if (e.dificil_provimento) li.append(elemento("span", "etiqueta", "Difícil provimento"));
-        if (fins.length > 1) li.append(elemento("span", "edital-criterio", `até ${dataCurta(e.fim)}`));
+        if (fins.length > 1) {
+          li.append(elemento("span", "edital-criterio", `inscrições até ${dataCurta(e.fim)}${e.desistencia ? ` · desistência até ${dataCurta(e.desistencia)}` : ""}`));
+        }
         ul.append(li);
       }
       grupo.append(ul);
       lista.append(grupo);
     }
     bloco.append(lista);
-    bloco.append(elemento("p", "nota", "Prazo calculado pelo site (10 dias corridos a partir do 1º dia útil após a publicação); confira no edital."));
+    bloco.append(elemento("p", "nota", "Prazos calculados pelo site: inscrições em 10 dias corridos a partir do 1º dia útil após a publicação; " +
+      "desistência em 3 dias úteis após a publicação da lista de inscritos (art. 156 da LC 25/1998), " +
+      "estimada com a lista publicada no 1º dia útil após o fim das inscrições. Confira no edital e no portal do MPGO."));
   }
   const todos = elemento("p", "editais-resumo");
   todos.append(linkExterno(dados.pagina, "Todos os editais do ano no portal do MPGO"));
@@ -886,10 +895,9 @@ function linhaSaudeMunicipio(municipio, ctx) {
 /** Uma instituição: o nome abre o endereço completo, o telefone e o link do mapa. */
 function itemInstituicao(i, municipio, selos = []) {
   const li = elemento("li");
-  const caixa = elemento("details", "instituicao");
-  const resumo = elemento("summary");
-  resumo.append(elemento("span", "instituicao-nome", i.nome));
-  if (i.detalhe) resumo.append(elemento("span", "instituicoes-detalhe", i.detalhe));
+  const caixa = elemento("div", "instituicao");
+  caixa.append(elemento("span", "instituicao-nome", i.nome));
+  if (i.detalhe) caixa.append(elemento("span", "instituicoes-detalhe", i.detalhe));
   if (selos.length) {
     const linha = elemento("span", "instituicao-selos");
     for (const [texto, classe, titulo] of selos) {
@@ -897,20 +905,20 @@ function itemInstituicao(i, municipio, selos = []) {
       if (titulo) selo.title = titulo;
       linha.append(selo);
     }
-    resumo.append(linha);
+    caixa.append(linha);
   }
-  caixa.append(resumo);
-  const contato = elemento("div", "instituicao-contato");
-  contato.append(elemento("span", "", i.endereco ? `${i.endereco} · ${municipio}/GO` : `Endereço não informado na base oficial · ${municipio}/GO`));
+  // Endereço, telefone e mapa à mostra, sem precisar clicar
+  const contato = elemento("p", "instituicao-contato");
+  contato.append(i.endereco ? `${i.endereco} · ${municipio}/GO` : `Endereço não informado na base oficial · ${municipio}/GO`, " · ");
   if (i.telefone) {
     const tel = elemento("a", "", `Tel. ${i.telefone}`);
     tel.href = `tel:${i.telefone.replace(/\D/g, "")}`;
     contato.append(tel);
   } else {
-    contato.append(elemento("span", "", "Telefone não informado na base oficial"));
+    contato.append("Telefone não informado");
   }
   const busca = i.endereco ? `${i.nome}, ${i.endereco}, ${municipio} - GO` : `${i.nome}, ${municipio} - GO`;
-  contato.append(linkExterno(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, "Ver no mapa"));
+  contato.append(" · ", linkExterno(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(busca)}`, "Ver no mapa"));
   caixa.append(contato);
   li.append(caixa);
   return li;
@@ -971,7 +979,7 @@ function painelInstituicoes(dados, perfil) {
   const outras = inst.tipos.filter((t) => !ligadas.includes(t));
   const dono = promotoriasAtuais.length > 1 ? "das suas promotorias" : "da sua promotoria";
   painel.append(elemento("p", "nota nota-local",
-    `Por cidade, primeiro as ligadas às matérias ${dono}. Clique num tipo para ver a lista e no nome de uma instituição para ver o endereço, o telefone e o mapa. ` +
+    `Por cidade, primeiro as ligadas às matérias ${dono}. Clique num tipo para ver a lista, com o endereço, o telefone e o mapa de cada instituição. ` +
     "Os selos mostram o IDEB de cada escola (verde: igual ou acima da mediana das escolas públicas de Goiás; laranja: abaixo), a lotação das unidades prisionais e de acolhimento e os leitos de cada hospital."));
   for (const [municipio, porTipo] of Object.entries(inst.municipios)) {
     const cidade = elemento("section", "instituicoes-cidade");
@@ -1050,7 +1058,8 @@ function graficoRetrato(bloco, altura = 320) {
 function desenharDepois(div, dados, layout) {
   requestAnimationFrame(() => {
     if (!window.Plotly || !div.isConnected) return;
-    Plotly.react(div, dados, layoutBase({ hovermode: "closest", ...layout }), { ...configPlotly, displayModeBar: false });
+    // Sem zoom pela rodinha do mouse: girar a rodinha sobre o mapa rola a página
+    Plotly.react(div, dados, layoutBase({ hovermode: "closest", ...layout }), { ...configPlotly, displayModeBar: false, scrollZoom: false });
   });
 }
 
@@ -1270,13 +1279,58 @@ function painelCamara(nome, dados) {
         };
       }))
       : elemento("p", "vazio", "Nenhuma sessão nos últimos dias nem marcada.");
-    corpo.append(bloco(titulo, sessoes, rodapeLink(agenda.link, "Todas as sessões no SAPL da Câmara")));
+    const partes = [sessoes];
+    // Sem próxima sessão publicada, ao menos os dias e o horário de costume (pelas sessões
+    // ordinárias registradas no SAPL nos últimos meses)
+    if (agenda.habitual) {
+      const proxima = agenda.sessoes.some((s) => s.data >= hoje);
+      const p = elemento("p", proxima ? "camara-habitual" : "camara-habitual destaque");
+      p.append(elemento("strong", "", "Sessões ordinárias: "), `${agenda.habitual[0].toUpperCase()}${agenda.habitual.slice(1)}`);
+      p.title = dica(["Dias e horário de costume, pelas sessões ordinárias registradas nos últimos meses"], "SAPL da Câmara");
+      partes.push(p);
+    }
+    partes.push(rodapeLink(agenda.link, "Todas as sessões no SAPL da Câmara"));
+    if (agenda.vereadores?.length) partes.push(blocoVereadores(agenda));
+    corpo.append(bloco(titulo, ...partes));
   }
   if (semAgenda.length) {
-    corpo.append(elemento("p", "vazio", `${semAgenda.length > 1 ? "As câmaras de" : "A Câmara de"} ${juntarNomes(semAgenda)} não ${semAgenda.length > 1 ? "publicam" : "publica"} a agenda das sessões em formato aberto.`));
+    corpo.append(elemento("p", "vazio", `${semAgenda.length > 1 ? "As câmaras de" : "A Câmara de"} ${juntarNomes(semAgenda)} não ${semAgenda.length > 1 ? "publicam" : "publica"} a agenda das sessões nem a composição em formato aberto (SAPL do Interlegis); consulte o site oficial da câmara.`));
   }
   painel.append(corpo);
   return painel;
+}
+
+/** Vereadores no exercício do mandato, com foto, o presidente e o vice primeiro (SAPL da Câmara). */
+function blocoVereadores(agenda) {
+  const div = elemento("div", "vereadores");
+  div.append(elemento("h4", "", `Vereadores (${agenda.vereadores.length})`));
+  const ul = elemento("ul", "vereadores-lista");
+  for (const v of agenda.vereadores) {
+    const li = elemento("li", /^(presidente|vice)/i.test(v.cargo) ? "mesa" : "");
+    const foto = elemento("span", "vereador-foto");
+    if (v.foto) {
+      const img = elemento("img");
+      img.src = v.foto;
+      img.alt = "";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.addEventListener("error", () => { img.remove(); foto.textContent = v.nome[0] || "?"; }, { once: true });
+      foto.append(img);
+    } else {
+      foto.textContent = v.nome[0] || "?";
+    }
+    const texto = elemento("span", "vereador-texto");
+    texto.append(linkExterno(v.link, v.nome));
+    if (v.cargo) texto.append(elemento("span", /^(presidente|vice)/i.test(v.cargo) ? "etiqueta andamento" : "etiqueta", v.cargo));
+    li.append(foto, texto);
+    ul.append(li);
+  }
+  div.append(ul);
+  const fonte = elemento("p", "nota");
+  fonte.append("Composição atual e Mesa Diretora pelo SAPL da Câmara, atualizadas automaticamente · ", linkExterno(agenda.parlamentares, "Ver no SAPL"));
+  fonte.title = AVISO_DADOS;
+  div.append(fonte);
+  return div;
 }
 
 /** Cartão da promotoria principal (comarca, matérias e atribuição), as outras pelas quais o
@@ -1339,7 +1393,6 @@ function mostrarPromotorias() {
   seletor.append(campo, avisoOutra);
   botao.addEventListener("click", () => {
     seletor.hidden = !seletor.hidden;
-    extras.hidden = !outras.length && seletor.hidden;
     if (!seletor.hidden) campo.focus();
   });
   const adicionar = () => {
@@ -1358,9 +1411,9 @@ function mostrarPromotorias() {
   };
   campo.addEventListener("change", adicionar);
   campo.addEventListener("keydown", (e) => { if (e.key === "Enter") adicionar(); });
-  extras.append(seletor);
+  // O campo abre logo abaixo do botão, no alto à direita
   extras.hidden = !outras.length;
-  document.getElementById("acao-outra").replaceChildren(botao);
+  document.getElementById("acao-outra").replaceChildren(botao, seletor);
 
   cartao.style.setProperty("--cor", "#6b7f99");
   cartao.replaceChildren(titulo, comarca, materias, atribuicao, aviso, extras);

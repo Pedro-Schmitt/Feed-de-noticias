@@ -795,6 +795,9 @@ footer { padding-bottom: 24px; }
 .botao-remover:hover { border-color: var(--suave); }
 /* Discreto, abaixo de "Trocar promotoria" */
 .acoes-promotoria { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+#acao-outra { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+#acao-outra .seletor-outra { width: min(420px, 80vw); align-items: stretch; }
+#acao-outra .seletor-outra .nota { text-align: right; }
 .botao-outra {
   border: 0; background: none; padding: 2px 4px; border-radius: 6px;
   font-size: 0.78rem; font-weight: 500; color: var(--suave);
@@ -914,16 +917,10 @@ footer { padding-bottom: 24px; }
   padding: 10px 0 4px !important; border-top: 0 !important;
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--suave);
 }
-.instituicao summary { cursor: pointer; list-style: none; display: flex; flex-direction: column; }
-.instituicao summary::-webkit-details-marker { display: none; }
+.instituicao { display: flex; flex-direction: column; }
 .instituicao-nome { font-size: 0.9rem; font-weight: 500; }
-.instituicao summary:hover .instituicao-nome { color: var(--cor); text-decoration: underline; }
-.instituicao[open] .instituicao-nome { color: var(--cor); }
-.instituicao-contato {
-  display: flex; flex-direction: column; gap: 2px; margin: 6px 0 2px; padding: 6px 10px;
-  border-left: 3px solid var(--cor); font-size: 0.8rem; color: var(--suave);
-}
-.instituicao-contato a { color: var(--cor); font-weight: 600; width: fit-content; }
+.instituicao-contato { margin: 3px 0 0; font-size: 0.76rem; line-height: 1.4; color: var(--suave); }
+.instituicao-contato a { color: var(--cor); font-weight: 600; }
 .instituicao-contato a:hover { text-decoration: underline; }
 
 /* --- Retrato da comarca: violência, lotação, IDEB e saúde --- */
@@ -1022,3 +1019,23 @@ a.resumo-titulo:hover { text-decoration: underline; }
 .esump-acoes { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.78rem; }
 .esump-acoes a:not(.etiqueta) { color: var(--cor); font-weight: 600; }
 .esump-acoes a:hover { text-decoration: underline; }
+
+/* Câmaras: dias de costume das sessões e vereadores (SAPL) */
+.camara-habitual { margin: 8px 0 0; font-size: 0.82rem; color: var(--texto); cursor: help; }
+.camara-habitual.destaque { padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--cor) 9%, transparent); }
+.vereadores { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--borda); }
+.vereadores h4 { margin: 0 0 8px; font-size: 0.85rem; }
+.vereadores-lista {
+  list-style: none; margin: 0 0 6px; padding: 0; max-height: 340px; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 10px;
+}
+.vereadores-lista li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border: 0; }
+.vereadores-lista li.mesa { order: -1; }
+.vereador-foto {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--cor) 14%, transparent); color: var(--cor); font-weight: 700;
+}
+.vereador-foto img { width: 100%; height: 100%; object-fit: cover; }
+.vereador-texto { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; font-size: 0.8rem; line-height: 1.25; }
+.vereador-texto a { color: var(--texto); font-weight: 600; }
+.vereador-texto a:hover { color: var(--cor); text-decoration: underline; }

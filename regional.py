@@ -205,7 +205,17 @@ def agenda_sapl(nome_sapl, hoje):
     passadas = [s for s in sessoes if s["data_inicio"] < hoje.isoformat()]
     passadas = passadas[len(passadas) - (SESSOES_POR_CAMARA - len(proximas)):] if len(proximas) < SESSOES_POR_CAMARA else []
     dados = {"results": passadas + proximas}
+    # Vereadores e dias de costume das sessões: se falharem, a agenda sai assim mesmo
+    extras = {}
+    for chave, funcao in (("vereadores", vereadores_sapl), ("habitual", sessoes_habituais)):
+        try:
+            extras[chave] = funcao(base, hoje)
+        except Exception as erro:
+            print(f"[regional] {chave} do SAPL {nome_sapl}: {type(erro).__name__}: {erro}")
+            extras[chave] = None
     return {
+        **extras,
+        "parlamentares": f"{base}/parlamentar/",
         "link": f"{base}/sessao/pesquisar-sessao",
         "sessoes": [{
             "data": s["data_inicio"],
@@ -216,6 +226,104 @@ def agenda_sapl(nome_sapl, hoje):
             "finalizada": bool(s.get("finalizada")),
         } for s in dados["results"]],
     }
+
+
+DIAS_SEMANA = ["segundas-feiras", "terças-feiras", "quartas-feiras", "quintas-feiras", "sextas-feiras", "sábados", "domingos"]
+DIAS_HABITUAIS = 120  # sessões ordinárias dos últimos meses, para achar o dia e o horário de costume
+ORDEM_CARGOS = ["Presidente", "Vice-Presidente", "Primeiro Vice-Presidente", "Segundo Vice-Presidente"]
+
+
+def _sapl_todos(base, caminho, **params):
+    """Todos os resultados de uma lista da API do SAPL (paginada)."""
+    itens, pagina = [], 1
+    while pagina <= 20:
+        dados = _get(f"{base}/api{caminho}", params={**params, "page": pagina, "page_size": 100}).json()
+        itens += dados.get("results", [])
+        if not (dados.get("pagination") or {}).get("next_page"):
+            break
+        pagina += 1
+    return itens
+
+
+def _nome_proprio(nome):
+    """Nome cadastrado todo em maiúsculas → "Admilson Martins da Silva"; os outros ficam como estão."""
+    if not nome.isupper():
+        return nome.strip()
+    pequenas = {"de", "da", "do", "das", "dos", "e"}
+    return " ".join(p.lower() if p.lower() in pequenas and i else p.capitalize() for i, p in enumerate(nome.split()))
+
+
+def _https(url):
+    return re.sub(r"^http://", "https://", url) if url else ""
+
+
+def vereadores_sapl(base, hoje):
+    """Vereadores no exercício do mandato na legislatura atual (nome, foto e cargo na Mesa), com
+    o presidente e o vice primeiro. None se a câmara não mantém a legislatura no SAPL."""
+    hoje = hoje.isoformat()
+    legislatura = next((l for l in _sapl_todos(base, "/parlamentares/legislatura/")
+                        if l["data_inicio"] <= hoje <= l["data_fim"]), None)
+    if not legislatura:
+        return None
+    mandatos = [m for m in _sapl_todos(base, "/parlamentares/mandato/", legislatura=legislatura["id"])
+                if m.get("legislatura") == legislatura["id"]
+                and (m.get("data_inicio_mandato") or "") <= hoje <= (m.get("data_fim_mandato") or "9999")
+                and not m.get("tipo_afastamento")]
+    if not mandatos:
+        return None
+    # Mesa da sessão legislativa (ano) atual
+    cargos = {}
+    sessao = next((s for s in _sapl_todos(base, "/parlamentares/sessaolegislativa/", legislatura=legislatura["id"])
+                   if s["data_inicio"] <= hoje <= s["data_fim"]), None)
+    if sessao:
+        nomes = {c["id"]: c["descricao"] for c in _sapl_todos(base, "/parlamentares/cargomesa/")}
+        mesas = [m for m in _sapl_todos(base, "/parlamentares/mesadiretora/", sessao_legislativa=sessao["id"])
+                 if m.get("sessao_legislativa") == sessao["id"]]
+        for mesa in mesas[-1:]:
+            for c in _sapl_todos(base, "/parlamentares/composicaomesa/", mesa_diretora=mesa["id"]):
+                if c.get("mesa_diretora") == mesa["id"]:
+                    cargos[c["parlamentar"]] = nomes.get(c["cargo"], "")
+    ativos = {p["id"]: p for p in _sapl_todos(base, "/parlamentares/parlamentar/", ativo="True")}
+    vereadores = []
+    for m in mandatos:
+        p = ativos.get(m["parlamentar"]) or _get(f"{base}/api/parlamentares/parlamentar/{m['parlamentar']}/").json()
+        vereadores.append({
+            "nome": _nome_proprio(p.get("nome_parlamentar") or p.get("nome_completo") or ""),
+            "foto": _https(p.get("fotografia")),
+            "cargo": cargos.get(m["parlamentar"], ""),
+            "link": f"{base}/parlamentar/{m['parlamentar']}",
+        })
+
+    def ordem(v):
+        cargo = v["cargo"]
+        return (ORDEM_CARGOS.index(cargo) if cargo in ORDEM_CARGOS else (len(ORDEM_CARGOS) if cargo else 99), v["nome"])
+    return sorted(vereadores, key=ordem)
+
+
+def sessoes_habituais(base, hoje):
+    """Dias e horário de costume das sessões ordinárias, pelas realizadas nos últimos meses
+    (ex.: "segundas-feiras, às 19h"). None sem sessões ordinárias no período."""
+    tipos = {t["id"]: t["nome"] for t in _sapl_todos(base, "/sessao/tiposessaoplenaria/")}
+    sessoes = [s for s in _sapl_todos(base, "/sessao/sessaoplenaria/",
+                                      data_inicio__gte=(hoje - timedelta(days=DIAS_HABITUAIS)).isoformat(),
+                                      data_inicio__lte=hoje.isoformat())
+               if "ordin" in tipos.get(s.get("tipo"), "").lower() and "extra" not in tipos.get(s.get("tipo"), "").lower()]
+    if len(sessoes) < 3:
+        return None
+    por_dia = {}
+    for s in sessoes:
+        dia = datetime.fromisoformat(s["data_inicio"]).weekday()
+        por_dia.setdefault(dia, []).append((s.get("hora_inicio") or "")[:5])
+    maior = max(len(h) for h in por_dia.values())
+    partes = []
+    for dia in sorted(d for d, horas in por_dia.items() if len(horas) >= max(2, maior * 0.5)):
+        horas = [h for h in por_dia[dia] if h]
+        hora = max(set(horas), key=horas.count) if horas else ""
+        texto_hora = f", às {hora.lstrip('0').replace(':00', 'h').replace(':', 'h')}" if hora else ""
+        partes.append(f"{DIAS_SEMANA[dia]}{texto_hora}")
+    if not partes:
+        return None
+    return "; ".join(partes)
 
 
 def agendas_camaras(mapa):

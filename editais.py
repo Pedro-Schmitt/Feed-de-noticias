@@ -19,6 +19,7 @@ MPGO = "https://www.mpgo.mp.br"
 PAGINA_ANO = MPGO + "/portal/conteudo/editais-{ano}"
 DIAS_RECENTES = 30  # só os editais publicados nesse período podem estar abertos
 PRAZO_PADRAO = 10
+PRAZO_DESISTENCIA = 3  # dias úteis após a publicação da lista dos inscritos (art. 156 da LC 25/1998)
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
 CABECALHOS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -44,6 +45,24 @@ def fim_das_inscricoes(publicado, dias):
     while not _dia_util(inicio):
         inicio += timedelta(days=1)
     return inicio + timedelta(days=dias - 1)
+
+
+def _proximo_dia_util(dia):
+    dia += timedelta(days=1)
+    while not _dia_util(dia):
+        dia += timedelta(days=1)
+    return dia
+
+
+def fim_das_desistencias(fim_inscricoes):
+    """Encerradas as inscrições, a lista dos inscritos é publicada e corre o prazo de 3 dias úteis
+    para impugnações, reclamações e desistências (art. 156 da LC 25/1998, com a redação da LC
+    189/2023). A data da lista não vem no edital: a estimativa supõe a lista publicada no primeiro
+    dia útil após o fim das inscrições e o prazo contado a partir do dia útil seguinte."""
+    dia = _proximo_dia_util(fim_inscricoes)
+    for _ in range(PRAZO_DESISTENCIA):
+        dia = _proximo_dia_util(dia)
+    return dia
 
 
 def _texto_pdf(url):
@@ -86,6 +105,7 @@ def ler_edital(url, data_arquivo):
         "dificil_provimento": "ifícil provimento" in texto,
         "publicado": publicado.isoformat(),
         "fim": fim_das_inscricoes(publicado, dias).isoformat(),
+        "desistencia": fim_das_desistencias(fim_das_inscricoes(publicado, dias)).isoformat(),
         "link": url,
     }
 

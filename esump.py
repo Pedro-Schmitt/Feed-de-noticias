@@ -137,6 +137,13 @@ def _nome_do_evento(titulo, corpo, tema):
     return nome[:1].upper() + nome[1:]
 
 
+def _sem_homenagem(local):
+    """Sem o nome do homenageado do auditório ou do edifício: "auditório do edifício-sede do MPGO
+    Dra. Nilma Maria Naves Dias do Carmo, em Goiânia" → "auditório do edifício-sede do MPGO, em Goiânia"."""
+    local = re.sub(r",?\s+Dr(?:a|\.ª|\.ᵃ|ª)?\.?\s+[A-ZÁÉÍÓÚ][^,;]*", "", local)
+    return re.sub(r"\s+,", ",", re.sub(r",\s*,", ",", local)).strip(" ,")
+
+
 def detalhar(evento):
     """Completa o evento com a página da notícia: nome, tipo, data, horário, local, período e link
     das inscrições."""
@@ -173,7 +180,7 @@ def detalhar(evento):
         "data": data.isoformat() if data else None,
         "quando": quando_ficha,
         "hora": hora[0].lower() + hora[1:] if hora else "",
-        "local": local[0].upper() + local[1:] if local else "",
+        "local": _sem_homenagem(local[0].upper() + local[1:]) if local else "",
         "inscricoes_ate": ate.isoformat() if ate else None,
         "inscricoes_ate_hora": (prazo.group(1) or prazo.group(3) or "") if prazo else "",
         "inscricao": html.unescape(link.group(1)) if link else "",
