@@ -997,6 +997,17 @@ a.resumo-titulo:hover { text-decoration: underline; }
 /* MPGO: cursos da ESUMP como terceira coluna e o CSMP embaixo, na linha inteira */
 .mpgo-colunas > .esump { margin-top: 0; padding-top: 0; border-top: 0; display: flex; flex-direction: column; }
 .mpgo-colunas > .esump .esump-lista { grid-template-columns: 1fr; flex: 1 1 0; min-height: 200px; contain: size; overflow-y: auto; align-content: start; }
-.painel-mpgo > .csmp-embaixo { margin-top: 20px; }
+.mpgo-embaixo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 20px; align-items: start; }
+@media (max-width: 760px) { .mpgo-embaixo { grid-template-columns: 1fr; } }
+/* Diário Oficial do MPGO, ao lado do CSMP */
+.domp-edicao { margin: 0 0 8px; font-size: 0.88rem; }
+.domp-resumo { margin: 0 0 10px; font-size: 0.9rem; line-height: 1.5; }
+.domp-destaques { list-style: none; margin: 0 0 10px; padding: 0; }
+.domp-destaques li { padding: 8px 0 8px 10px; border-left: 3px solid color-mix(in srgb, var(--cor) 45%, transparent); margin-bottom: 8px; }
+.domp-secao { margin: 0; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--suave); }
+.domp-titulo { margin: 2px 0; font-size: 0.88rem; font-weight: 700; }
+.domp-texto { margin: 0; font-size: 0.84rem; line-height: 1.45; }
+.domp-secoes { margin: 0 0 8px; font-size: 0.78rem; color: var(--suave); line-height: 1.5; }
+.domp-aviso { font-size: 0.75rem; }
 /* Números com fonte e aviso ao passar o mouse */
 .selo-instituicao[title], .instituicoes-indicadores[title], .retrato-cartao[title], .resumo-numeros li[title] { cursor: help; }

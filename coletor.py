@@ -12,6 +12,7 @@ from urllib.parse import quote, urlsplit
 
 import requests
 
+import domp
 import editais
 import esump
 import informativos
@@ -555,6 +556,7 @@ def coletar():
         futuro_informativos = executor.submit(informativos.coletar)
         futuro_editais = executor.submit(editais.coletar)
         futuro_esump = executor.submit(esump.coletar)
+        futuro_domp = executor.submit(domp.coletar)
         futuro_normas = executor.submit(normas.coletar)
 
     noticias, vistos, falhas = [], set(), []
@@ -620,6 +622,7 @@ def coletar():
         "informativos": futuro_informativos.result(),
         "editais": _resultado_ou_none(futuro_editais, "editais do MPGO"),
         "esump": _resultado_ou_none(futuro_esump, "eventos da ESUMP"),
+        "domp": _resultado_ou_none(futuro_domp, "Diário Oficial do MPGO"),
         **(_resultado_ou_none(futuro_normas, "CNMP, CNJ e legislação") or {"conselhos": None, "legislacao": None}),
     }
 

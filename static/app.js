@@ -232,6 +232,46 @@ function blocoEditais(dados) {
 
 const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
+const PAGINA_DOMP = "https://www.mpgo.mp.br/portal/domp";
+
+/** Diário Oficial do MPGO: a edição mais recente, com o breve resumo e os destaques; o link do
+ * Diário fica embaixo. */
+function painelDomp(dados) {
+  const painel = elemento("section", "painel secao painel-interno domp");
+  painel.style.setProperty("--cor", "#0c9fb5");
+  painel.append(elemento("h2", "", "Diário Oficial do MPGO"));
+  if (!dados) {
+    painel.append(elemento("p", "vazio", "Não foi possível ler o Diário Oficial agora."));
+  } else {
+    const [ano, mes, dia] = dados.data.split("-").map(Number);
+    const semana = new Date(Date.UTC(ano, mes - 1, dia, 12)).toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
+    const total = somar(dados.secoes.map((s) => s.documentos));
+    const edicao = elemento("p", "domp-edicao");
+    edicao.append(elemento("strong", "", `Edição ${dados.numero}`), ` · ${semana}, ${dataBr(dados.data)} · ${numeroBr(total)} publicações`);
+    painel.append(edicao);
+    if (dados.ia) painel.append(elemento("p", "domp-resumo", dados.resumo));
+    if (dados.destaques.length) {
+      const ul = elemento("ul", "domp-destaques");
+      for (const d of dados.destaques) {
+        const li = elemento("li");
+        li.append(elemento("p", "domp-secao", d.secao), elemento("p", "domp-titulo", d.titulo), elemento("p", "domp-texto", d.texto));
+        ul.append(li);
+      }
+      painel.append(ul);
+    }
+    // Quantas publicações de cada seção (sem o Claude, é o próprio resumo)
+    const secoes = elemento("p", "domp-secoes");
+    secoes.append(...dados.secoes.flatMap((s, i) => [i ? " · " : "", `${s.nome}: `, elemento("strong", "", numeroBr(s.documentos))]));
+    painel.append(secoes);
+    painel.append(elemento("p", "nota domp-aviso", (dados.ia ? "Resumo feito por inteligência artificial a partir do texto da edição. " : "Resumo automático pelos atos normativos e pelo número de publicações de cada seção. ") + AVISO_DADOS));
+  }
+  const links = elemento("div", "links-quadro");
+  if (dados?.link) links.append(linkExterno(dados.link, `Ler a edição ${dados.numero} completa (PDF)`));
+  links.append(linkExterno(dados?.pagina || PAGINA_DOMP, "Acessar o Diário Oficial do MPGO"));
+  painel.append(links);
+  return painel;
+}
+
 /** Próximos cursos e eventos da Escola Superior (quadro MPGO), em cartões com a data. */
 function blocoEsump(dados) {
   const bloco = elemento("div", "esump");
@@ -272,7 +312,6 @@ const LINKS_JURIDICO = {
   mpgo: [
     ["Acessar todas as notícias do Portal do MPGO", "https://www.mpgo.mp.br/portal/noticias"],
     ["Acessar todas as notícias na Intranet do MPGO", "https://intranet.mpgo.mp.br/olimpo/news?category=ascom"],
-    ["Acessar o Diário Oficial do MPGO", "https://www.mpgo.mp.br/portal/domp"],
   ],
 };
 
@@ -313,7 +352,8 @@ function montarJuridico() {
     paineis[orgao.id] = painel;
     container.append(painel);
   }
-  // O MPGO ocupa a linha inteira em três colunas (notícias, editais e cursos da ESUMP), com o CSMP embaixo
+  // O MPGO ocupa a linha inteira em três colunas (notícias, editais e cursos da ESUMP); embaixo,
+  // o CSMP e o Diário Oficial lado a lado
   const { mpgo, csmp } = paineis;
   if (mpgo) {
     mpgo.classList.add("painel-mpgo");
@@ -321,11 +361,13 @@ function montarJuridico() {
     principal.append(...[...mpgo.children].slice(1)); // tudo menos o título
     const colunas = elemento("div", "mpgo-colunas");
     colunas.append(principal, blocoEditais(noticias.editais), blocoEsump(noticias.esump));
-    mpgo.append(colunas);
+    const embaixo = elemento("div", "mpgo-embaixo");
     if (csmp) {
-      csmp.classList.add("painel-interno", "csmp-embaixo");
-      mpgo.append(csmp);
+      csmp.classList.add("painel-interno");
+      embaixo.append(csmp);
     }
+    embaixo.append(painelDomp(noticias.domp));
+    mpgo.append(colunas, embaixo);
     document.getElementById("mpgo").replaceChildren(mpgo);
   }
   preencherAgendas();
@@ -745,7 +787,7 @@ const MOTIVOS_MATERIA = {
 
 
 // Os números das bases oficiais vêm com a fonte e o aviso de que podem conter erro
-const AVISO_DADOS = "Dado de base oficial, que pode conter erro: depende de confirmação pelo Promotor de Justiça.";
+const AVISO_DADOS = "A informação exibida pode conter erro ou estar desatualizada, não dispensando a confirmação pelo Promotor leitor.";
 
 /** Texto de "passar o mouse": as linhas, a fonte e o aviso (\n no title; <br> nos gráficos). */
 function dica(linhas, fonte, quebra = "\n") {
@@ -754,7 +796,7 @@ function dica(linhas, fonte, quebra = "\n") {
 
 /** Linha da fonte e do aviso no fim do texto de um gráfico (Plotly). */
 function rodapeGrafico(fonte) {
-  return `<br><span style="font-size:11px">Fonte: ${fonte}<br>Pode conter erro: confirme antes de usar.</span>`;
+  return `<br><span style="font-size:11px">Fonte: ${fonte}<br>A informação exibida pode conter erro ou estar desatualizada,<br>não dispensando a confirmação pelo Promotor leitor.</span>`;
 }
 
 const ETAPAS_CURTAS = { "Anos iniciais": "anos iniciais", "Anos finais": "anos finais", "Ensino médio": "ensino médio" };
@@ -2130,6 +2172,15 @@ function resumoMpgo() {
   for (const e of (noticias.esump?.eventos || []).filter((e) => e.inscricoes).slice(0, 2)) {
     const li = elemento("li");
     li.append(elemento("strong", "", "ESUMP · inscrições abertas"), " · ", linkExterno(e.link, e.titulo), e.data ? ` · ${dataCurta(e.data)}` : "");
+    destaques.append(li);
+  }
+  const domp = noticias.domp;
+  if (domp) {
+    const li = elemento("li");
+    const texto = domp.ia ? domp.resumo : domp.destaques.map((d) => d.titulo).join("; ");
+    li.append(elemento("strong", "", `Diário Oficial · edição ${domp.numero} (${dataCurta(domp.data)})`),
+      texto ? ` · ${encurtar(texto, 260)} · ` : " · ", linkExterno(domp.link, "ler a edição"));
+    li.title = AVISO_DADOS;
     destaques.append(li);
   }
   if (destaques.childElementCount) corpo.append(destaques);
