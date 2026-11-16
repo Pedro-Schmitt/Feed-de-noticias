@@ -182,6 +182,12 @@ function itemJuridico(n) {
 /** Um painel por órgão (STF, STJ, TJGO, CSMP), com cinco notícias só em texto. */
 const ORDEM_ENTRANCIAS = ["Procuradoria de Justiça", "Entrância final", "Entrância intermediária", "Entrância inicial"];
 
+/** "de 23/11 a 25/11, até 17h59": o prazo de desistência de um edital. */
+function periodoDesistencia(e) {
+  const inicio = e.desistencia_inicio && e.desistencia_inicio !== e.desistencia ? `de ${dataCurta(e.desistencia_inicio)} a ` : "até ";
+  return `${inicio}${dataCurta(e.desistencia)}${e.desistencia_hora ? `, até ${e.desistencia_hora}` : ""}`;
+}
+
 /** Editais de promoção e remoção com inscrições abertas (quadro MPGO), agrupados por entrância. */
 function blocoEditais(dados) {
   const bloco = elemento("div", "editais");
@@ -198,10 +204,8 @@ function blocoEditais(dados) {
     const prazo = fins.length === 1
       ? `inscrições até ${dataCurta(fins[0])}`
       : `inscrições até ${dataCurta(fins[0])} a ${dataCurta(fins[fins.length - 1])}`;
-    const desistencias = [...new Set(abertos.map((e) => e.desistencia).filter(Boolean))].sort();
-    const prazoDesistencia = !desistencias.length ? ""
-      : desistencias.length === 1 ? ` · desistências até ${dataCurta(desistencias[0])}`
-        : ` · desistências até ${dataCurta(desistencias[0])} a ${dataCurta(desistencias[desistencias.length - 1])}`;
+    const periodos = [...new Set(abertos.filter((e) => e.desistencia).map(periodoDesistencia))];
+    const prazoDesistencia = periodos.length === 1 ? ` · desistências ${periodos[0]}` : "";
     bloco.append(elemento("p", "editais-resumo", `${abertos.length} ${abertos.length === 1 ? "edital aberto" : "editais abertos"} · ${prazo}${prazoDesistencia}`));
 
     const lista = elemento("div", "editais-lista");
@@ -216,12 +220,12 @@ function blocoEditais(dados) {
         const li = elemento("li");
         const vaga = linkExterno(e.link, e.vaga || `Edital ${e.numero}`);
         vaga.title = `Edital n. ${e.numero} · publicado em ${dataCurta(e.publicado)} · inscrições até ${dataCurta(e.fim)}` +
-          (e.desistencia ? ` · desistência até ${dataCurta(e.desistencia)} (estimada)` : "");
+          (e.desistencia ? ` · desistências ${periodoDesistencia(e)}` : "");
         const detalhe = elemento("span", "edital-criterio", e.criterio + (e.subsidiario ? ` (subsidiário: ${e.subsidiario.toLowerCase()})` : ""));
         li.append(vaga, detalhe);
         if (e.dificil_provimento) li.append(elemento("span", "etiqueta", "Difícil provimento"));
         if (fins.length > 1) {
-          li.append(elemento("span", "edital-criterio", `inscrições até ${dataCurta(e.fim)}${e.desistencia ? ` · desistência até ${dataCurta(e.desistencia)}` : ""}`));
+          li.append(elemento("span", "edital-criterio", `inscrições até ${dataCurta(e.fim)}${e.desistencia ? ` · desistências ${periodoDesistencia(e)}` : ""}`));
         }
         ul.append(li);
       }
@@ -230,8 +234,8 @@ function blocoEditais(dados) {
     }
     bloco.append(lista);
     bloco.append(elemento("p", "nota", "Prazos calculados pelo site: inscrições em 10 dias corridos a partir do 1º dia útil após a publicação; " +
-      "desistência em 3 dias úteis após a publicação da lista de inscritos (art. 156 da LC 25/1998), " +
-      "estimada com a lista publicada no 1º dia útil após o fim das inscrições. Confira no edital e no portal do MPGO."));
+      "desistência nos 3 dias úteis seguintes ao fim das inscrições, até as 17h59 do último dia (art. 156 da LC 25/1998). " +
+      "Confira no edital e no portal do MPGO."));
   }
   const todos = elemento("p", "editais-resumo");
   todos.append(linkExterno(dados.pagina, "Todos os editais do ano no portal do MPGO"));
