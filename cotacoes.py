@@ -13,6 +13,7 @@ TIMEOUT = 30
 ATIVOS = {
     "USD": "Dólar",
     "EUR": "Euro",
+    "GBP": "Libra",
     "BTC": "Bitcoin",
     "ETH": "Ethereum",
     "TRX": "Tron",
@@ -20,7 +21,7 @@ ATIVOS = {
 }
 
 # Séries do Banco Central (SGS): cotação de venda PTAX
-SERIES_BCB = {"USD": 1, "EUR": 21619}
+SERIES_BCB = {"USD": 1, "EUR": 21619, "GBP": 21623}  # GBP: libra esterlina, venda
 
 # Pares da Binance cotados diretamente em reais
 PARES_BRL = {"BTC": "BTCBRL", "ETH": "ETHBRL", "USDT": "USDTBRL"}
@@ -111,7 +112,7 @@ def buscar_trx(inicio):
 # --- Cotações de hora em hora (últimas 24h), usadas só no filtro "1 dia" ---
 
 # Yahoo Finance: não é a PTAX oficial, mas tem dados de hora em hora
-SIMBOLOS_YAHOO = {"USD": "BRL=X", "EUR": "EURBRL=X"}
+SIMBOLOS_YAHOO = {"USD": "BRL=X", "EUR": "EURBRL=X", "GBP": "GBPBRL=X"}
 UMA_HORA = 60 * 60
 
 

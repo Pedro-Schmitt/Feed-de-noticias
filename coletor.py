@@ -356,28 +356,46 @@ def _link_real(link):
     return json.loads(json.loads(resp.text.split("\n\n")[1])[0][2])[1]
 
 
-def _imagem_da_pagina(link):
-    """A imagem de compartilhamento (og:image) da página da notícia, ou None."""
-    try:
-        pagina = requests.get(_link_real(link), headers=NAVEGADOR, timeout=10).text
-        meta = _META_IMAGEM.search(pagina)
+def _imagem_da_pagina(link, tentativas=2):
+    """A imagem de compartilhamento (og:image) da página da notícia, ou None. Uma falha de rede
+    (o Google Notícias às vezes não decifra o link na primeira vez) tem nova tentativa."""
+    for tentativa in range(tentativas):
+        try:
+            resp = requests.get(_link_real(link), headers=NAVEGADOR, timeout=10)
+        except Exception:
+            continue
+        if resp.status_code >= 400:  # o site recusa a leitura: tentar de novo não adianta
+            return None
+        meta = _META_IMAGEM.search(resp.text)
         url = meta and _CONTEUDO.search(meta.group(0))
         url = url and html.unescape(url.group(1))
         # Logotipo do veículo não serve de miniatura
         return url if url and url.startswith("https://") and "logo" not in url.lower() else None
-    except Exception:
-        return None
+    return None
+
+
+def _imagem_dos_outros_veiculos(noticia, maximo=4):
+    """A foto da mesma notícia em outro veículo do assunto, quando a do veículo principal não vem
+    (site que recusa a leitura, como o UOL)."""
+    for outra in noticia.get("relacionadas", [])[:maximo]:
+        imagem = _imagem_da_pagina(outra["link"], tentativas=1)
+        if imagem:
+            return imagem
+    return None
 
 
 def completar_imagens(secoes):
     """Busca na página da notícia a imagem das que não vieram com foto e das que só tinham a
     primeira <img> do texto do feed (que pode ser de outra matéria); se a página não responder,
-    fica a do texto."""
+    fica a do texto. Sem foto nenhuma, vale a da mesma notícia em outro veículo."""
     todas = [n for secao in secoes for n in secao["noticias"]]
     buscar = [n for n in todas if not n.get("imagem") or n.get("imagem_do_texto")]
     with ThreadPoolExecutor(max_workers=8) as executor:
         for noticia, imagem in zip(buscar, executor.map(lambda n: _imagem_da_pagina(n["link"]), buscar)):
             noticia["imagem"] = imagem or noticia.get("imagem")
+        sem_foto = [n for n in todas if not n.get("imagem") and n.get("relacionadas")]
+        for noticia, imagem in zip(sem_foto, executor.map(_imagem_dos_outros_veiculos, sem_foto)):
+            noticia["imagem"] = imagem
     for noticia in todas:
         noticia.pop("imagem_do_texto", None)
 

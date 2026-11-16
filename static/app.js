@@ -294,8 +294,37 @@ function blocoEsump(dados) {
         data.append(elemento("strong", "", "—"), elemento("span", "", "data no texto"));
       }
       const texto = elemento("div", "esump-texto");
-      texto.append(linkExterno(e.link, e.titulo));
-      if (e.inscricoes) texto.append(elemento("span", "etiqueta andamento", "Inscrições abertas"));
+      const titulo = linkExterno(e.link, e.titulo);
+      titulo.className = "esump-titulo";
+      titulo.title = e.noticia ? `Notícia: ${e.noticia}` : e.titulo;
+      texto.append(titulo);
+      if (e.tipo) texto.append(elemento("span", "esump-tipo", e.tipo));
+      // Datas de vários dias ("17, 18 e 19 de novembro de 2026"), horário, local e inscrições
+      const info = elemento("dl", "esump-info");
+      const linha = (rotulo, valor) => {
+        if (!valor) return;
+        info.append(elemento("dt", "", rotulo), elemento("dd", "", valor));
+      };
+      if (e.quando && /\d\s*(?:,|e|a)\s*\d/.test(e.quando)) linha("Datas", e.quando.replace(/\s*\(.*?\)/g, ""));
+      linha("Horário", e.hora);
+      linha("Local", e.local);
+      const desde = e.publicado ? dataCurta(e.publicado) : "";
+      if (e.inscricoes_ate) {
+        linha("Inscrições", `${desde ? `de ${desde} ` : ""}até ${dataCurta(e.inscricoes_ate)}${e.inscricoes_ate_hora ? `, ${e.inscricoes_ate_hora}` : ""}`);
+      } else if (e.inscricoes) {
+        linha("Inscrições", `abertas desde ${desde}`);
+      }
+      if (info.childElementCount) texto.append(info);
+      const acoes = elemento("p", "esump-acoes");
+      if (e.inscricao) {
+        const inscrever = linkExterno(e.inscricao, "Inscrever-se");
+        inscrever.className = "etiqueta andamento";
+        acoes.append(inscrever, " ");
+      } else if (e.inscricoes) {
+        acoes.append(elemento("span", "etiqueta andamento", "Inscrições abertas"), " ");
+      }
+      acoes.append(linkExterno(e.link, "Saiba mais"));
+      texto.append(acoes);
       li.append(data, texto);
       lista.append(li);
     }
@@ -1698,13 +1727,14 @@ async function carregarAgendas() {
 const CORES = {
   USD: "#2a7de1",
   EUR: "#7b5cd6",
+  GBP: "#0f9d58",
   BTC: "#f2a900",
   ETH: "#627eea",
   TRX: "#e5342f",
   USDT: "#26a17b",
 };
 
-const MOEDAS = ["USD", "EUR"];
+const MOEDAS = ["USD", "EUR", "GBP"];
 const CRIPTOS = ["BTC", "ETH", "TRX", "USDT"];
 
 const PERIODOS = {

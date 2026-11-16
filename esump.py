@@ -78,16 +78,106 @@ def data_do_evento(titulo, texto, publicado):
     return min(candidatas)[1] if candidatas else None
 
 
-def _texto_da_noticia(link):
-    """O texto da notícia (da página dela), para achar a data que o resumo da lista não traz."""
+def _pagina_da_noticia(link):
+    """(html do corpo, texto do corpo) da página da notícia, ou ("", "")."""
     try:
         resp = requests.get(link, timeout=TIMEOUT, headers=CABECALHOS)
         resp.raise_for_status()
     except requests.RequestException:
-        return ""
-    texto = _texto(re.sub(r"<(script|style)[^>]*>.*?</>", " ", resp.text, flags=re.S | re.I))
+        return "", ""
+    pagina = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", resp.text, flags=re.S | re.I)
+    texto = _texto(pagina)
     inicio = texto.find("Visualizações")  # o corpo vem depois da data e das visualizações
-    return texto[inicio:inicio + 4000] if inicio >= 0 else ""
+    fim = texto.find("Contatos da Esump", inicio)
+    corpo = texto[inicio:fim if fim > inicio else inicio + 6000] if inicio >= 0 else ""
+    return pagina, corpo
+
+
+# Ficha no fim das notícias de evento: "CURSO PRESENCIAL TEMA: ... DATA: ... HORÁRIO: ... LOCAL: ..."
+_ROTULOS = r"TEMA|DATA|HOR[ÁA]RIO|LOCAL|P[ÚU]BLICO-ALVO|PROGRAMA[ÇC][ÃA]O|INSCRI[ÇC][ÃÕ]O?E?S?|FACILITADORA?\(?E?S?\)?|EXPOSITOR[A-Z()]*|PALESTRANTE[A-Z()]*|CARGA HOR[ÁA]RIA|MODALIDADE|VAGAS"
+_TIPO_FICHA = re.compile(r"\b((?:CURSO|SEMIN[ÁA]RIO|OFICINA|WEBINAR|PALESTRA|WORKSHOP|CONGRESSO|ENCONTRO|F[ÓO]RUM|DI[ÁA]LOGOS?|RODA DE CONVERSA|CAPACITA[ÇC][ÃA]O|EVENTO)"
+                         r"(?:\s+(?:PRESENCIAL|ON-?LINE|H[ÍI]BRID[OA]|EAD|INSTITUCIONA(?:L|IS)))?)\s+TEMA\s*:")
+_HORA = re.compile(r"\b(?:das|às|a partir das)\s+(\d{1,2}h(?:\d{2})?|\d{1,2}(?=\s+(?:às|a)\s+\d{1,2}\s*h))"
+                   r"(?:\s*(?:às|a)\s+(\d{1,2}\s*h(?:oras|\d{2})?))?", re.I)
+_LOCAL = re.compile(r"\b(?:no|na|pela)\s+((?:audit[óo]rio|sala|plataforma|espa[çc]o|centro de treinamento)\b(?:Dra?\.ᵃ?|[^.;]){0,160}?)(?=[.;]|,\s+(?:das|às|com|e\s+será|que)\b|$)", re.I)
+_PRAZO = re.compile(r"inscri[çc][ãõ]o?e?s?\b[^.]{0,140}?\b(?:até|prorrogad[ao]s? para)\s+(?:(?:as|às)\s+(\d{1,2}h\d{0,2})\s+d[oa]\s+)?(?:o\s+)?(?:dia\s+)?"
+                    rf"(\d{{1,2}}/\d{{1,2}}(?:/\d{{4}})?|\d{{1,2}}º?\s+de\s+(?:{_MES})(?:\s+de\s+\d{{4}})?)(?:,?\s*às\s+(\d{{1,2}}h\d{{0,2}}))?", re.I)
+_LINK_INSCRICAO = re.compile(r"(?:INSCRI[ÇC][ÃÕ]O?E?S?\s*:|inscrever|inscri[çc][ãõ]o?e?s?[^<]{0,80}(?:link|aqui))[^<]{0,40}(?:<[^a][^>]*>\s*)*<a[^>]+href=\"([^\"]+)\"", re.I)
+
+
+def _campo(corpo, rotulo):
+    achado = re.search(rf"\b(?:{rotulo})\s*:\s*(.+?)\s*(?=\b(?:{_ROTULOS})\s*:|$)", corpo)
+    return achado.group(1).strip(" .;“”\"") if achado else ""
+
+
+def _data_texto(texto, publicado):
+    """"25/11/2026" ou "16 de novembro" → date."""
+    numerica = re.match(r"(\d{1,2})/(\d{1,2})(?:/(\d{4}))?$", texto)
+    if numerica:
+        dia, mes, ano = numerica.groups()
+        return date(int(ano or publicado.year), int(mes), int(dia))
+    extenso = re.match(rf"(\d{{1,2}})º?\s+de\s+({_MES})(?:\s+de\s+(\d{{4}}))?", texto, re.I)
+    if extenso:
+        return date(int(extenso.group(3) or publicado.year), MESES.index(extenso.group(2).lower()) + 1, int(extenso.group(1)))
+    return None
+
+
+def _nome_do_evento(titulo, corpo, tema):
+    """O nome do evento: o TEMA da ficha; senão o nome entre aspas no texto ("Congresso Internacional
+    “...”"); senão o título da notícia sem "Inscrições abertas para" e afins."""
+    if tema:
+        return tema
+    aspas = re.search(r"((?:[A-ZÁÉÍÓÚ][\wáéíóúâêôãõç]+\s+){0,3})[“\"]([^”\"]{12,200})[”\"]", corpo[len(titulo) * 2:][:2500])
+    if aspas:
+        antes = aspas.group(1).strip()
+        return f"{antes}: {aspas.group(2).strip()}" if antes and antes.lower() not in ("o", "a") else aspas.group(2).strip()
+    nome = re.sub(r"^.*?\b(?:abre|abrem|abertas?)\s+(?:as\s+)?inscri[çc][õo]es\s+(?:para|do|da|no|na)\s+", "", titulo, flags=re.I)
+    nome = re.sub(r"^inscri[çc][õo]es\s+abertas\s+para\s+", "", nome, flags=re.I)
+    nome = re.sub(r":\s*inscri[çc][õo]es.*$", "", nome, flags=re.I)
+    return nome[:1].upper() + nome[1:]
+
+
+def detalhar(evento):
+    """Completa o evento com a página da notícia: nome, tipo, data, horário, local, período e link
+    das inscrições."""
+    publicado = date.fromisoformat(evento["publicado"])
+    pagina, corpo = _pagina_da_noticia(evento["link"])
+    if not corpo:
+        return evento
+    ficha = _TIPO_FICHA.search(corpo)
+    trecho_ficha = corpo[ficha.start():] if ficha else ""
+    tema = _campo(trecho_ficha, "TEMA") if ficha else ""
+    quando_ficha = _campo(trecho_ficha, "DATA") if ficha else ""
+    data = (data_do_evento(evento["titulo"], f"dia {quando_ficha}", publicado) if quando_ficha else None) \
+        or (date.fromisoformat(evento["data"]) if evento["data"] else None) \
+        or data_do_evento(evento["titulo"], corpo, publicado)
+    hora = _campo(trecho_ficha, r"HOR[ÁA]RIO") if ficha else ""
+    if not hora:
+        achada = _HORA.search(corpo)
+        if achada:
+            inicio, fim = achada.group(1), achada.group(2)
+            inicio = inicio if "h" in inicio else f"{inicio}h"
+            hora = f"{inicio} às {re.sub(r'\s*horas', 'h', fim).replace(' ', '')}" if fim else inicio
+    local = _campo(trecho_ficha, "LOCAL") if ficha else ""
+    if not local:
+        achado = _LOCAL.search(corpo)
+        local = achado.group(1).strip() if achado else ""
+    prazo = _PRAZO.search(corpo)
+    ate = _data_texto(prazo.group(2), publicado) if prazo else None
+    link = _LINK_INSCRICAO.search(pagina)
+    return {
+        **evento,
+        "titulo": _nome_do_evento(evento["titulo"], corpo, tema),
+        "noticia": evento["titulo"],
+        "tipo": ficha.group(1).capitalize().replace("On-line", "on-line").replace("Online", "on-line") if ficha else "",
+        "data": data.isoformat() if data else None,
+        "quando": quando_ficha,
+        "hora": hora[0].lower() + hora[1:] if hora else "",
+        "local": local[0].upper() + local[1:] if local else "",
+        "inscricoes_ate": ate.isoformat() if ate else None,
+        "inscricoes_ate_hora": (prazo.group(1) or prazo.group(3) or "") if prazo else "",
+        "inscricao": html.unescape(link.group(1)) if link else "",
+    }
 
 
 def _pagina(numero):
@@ -105,12 +195,9 @@ def _pagina(numero):
         texto = _texto(corpo.group(1)) if corpo else ""
         publicado = datetime.strptime(publicado.group(1), "%d/%m/%Y").date()
         quando = data_do_evento(titulo, texto, publicado)
-        url = MPGO + link.group(1) if link.group(1).startswith("/") else link.group(1)
-        if not quando and publicado >= date.today() - timedelta(days=DIAS_BUSCA_PAGINA):
-            quando = data_do_evento(titulo, _texto_da_noticia(url), publicado)
         eventos.append({
             "titulo": titulo,
-            "link": url,
+            "link": MPGO + link.group(1) if link.group(1).startswith("/") else link.group(1),
             "publicado": publicado.isoformat(),
             "data": quando.isoformat() if quando else None,
             "inscricoes": bool(re.search(r"inscri[çc][õo]es (est[ãa]o )?abertas|abre inscri|abertas as inscri",
@@ -120,26 +207,39 @@ def _pagina(numero):
 
 
 def coletar():
-    """Os próximos eventos, do mais próximo para o mais distante (os sem data no fim)."""
+    """Os próximos eventos (não as notícias): nome, data, horário, local e inscrições, do mais
+    próximo para o mais distante (os sem data no fim)."""
+    from concurrent.futures import ThreadPoolExecutor
+
     hoje = datetime.now(FUSO_BRASILIA).date()
-    eventos, vistos = [], set()
+    noticias, vistos = [], set()
     for numero in range(1, PAGINAS + 1):
         for e in _pagina(numero):
-            if e["link"] in vistos:
-                continue
-            vistos.add(e["link"])
-            futuro = e["data"] and e["data"] >= hoje.isoformat()
-            recente_sem_data = not e["data"] and e["publicado"] >= (hoje - timedelta(days=DIAS_SEM_DATA)).isoformat()
-            if futuro or recente_sem_data:
-                eventos.append(e)
-    eventos.sort(key=lambda e: (e["data"] is None, e["data"] or "", not e["inscricoes"], e["titulo"]))
+            if e["link"] not in vistos:
+                vistos.add(e["link"])
+                noticias.append(e)
+    # A data e os detalhes vêm da página de cada notícia recente ou de evento ainda por vir
+    candidatas = [e for e in noticias if (e["data"] and e["data"] >= hoje.isoformat())
+                  or e["publicado"] >= (hoje - timedelta(days=DIAS_BUSCA_PAGINA)).isoformat()]
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        detalhados = list(executor.map(detalhar, candidatas))
+    eventos = []
+    for e in detalhados:
+        futuro = e["data"] and e["data"] >= hoje.isoformat()
+        recente_sem_data = not e["data"] and e["publicado"] >= (hoje - timedelta(days=DIAS_SEM_DATA)).isoformat()
+        if futuro or recente_sem_data:
+            eventos.append(e)
+    eventos.sort(key=lambda e: (e["data"] is None, e["data"] or "", not e["inscricoes"], e["publicado"]))
     # Duas notícias do mesmo evento (a da abertura das inscrições e a das vagas custeadas, por
-    # exemplo): mesma data e título parecido; fica a primeira
+    # exemplo): mesma data e nome parecido; fica a mais completa
     unicos = []
     for e in eventos:
         palavras = _palavras(e["titulo"])
-        if not any(o["data"] == e["data"] and len(palavras & _palavras(o["titulo"])) >= 3 for o in unicos):
+        igual = next((o for o in unicos if o["data"] == e["data"] and len(palavras & _palavras(o["titulo"])) >= 3), None)
+        if not igual:
             unicos.append(e)
+        elif sum(bool(e.get(k)) for k in ("hora", "local", "inscricao")) > sum(bool(igual.get(k)) for k in ("hora", "local", "inscricao")):
+            unicos[unicos.index(igual)] = e
     return {"eventos": unicos[:QUANTIDADE], "pagina": PAGINA}
 
 
@@ -151,4 +251,5 @@ if __name__ == "__main__":
     import sys
     sys.stdout.reconfigure(encoding="utf-8")
     for e in coletar()["eventos"]:
-        print(e["data"], "inscrições" if e["inscricoes"] else "", e["titulo"])
+        print(e["data"], "|", e["titulo"], "|", e.get("tipo"), "|", e.get("hora"), "|", e.get("local"), "|",
+              e.get("inscricoes_ate"), e.get("inscricoes_ate_hora"), "|", e.get("inscricao"))

@@ -721,6 +721,7 @@ a.julgado-tese:hover { text-decoration: underline; }
 }
 
 .grade-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grade-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grade-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 24px; }
 
 .grafico { width: 100%; height: 280px; }
@@ -758,7 +759,7 @@ footer { padding-bottom: 24px; }
   h1 { font-size: 1.4rem; }
   .area { margin-top: 32px; }
   .area-cabecalho h2 { font-size: 1.3rem; }
-  .grade-2, .grade-4, .grade-juridico, .mpgo-colunas { grid-template-columns: 1fr; }
+  .grade-2, .grade-3, .grade-4, .grade-juridico, .mpgo-colunas { grid-template-columns: 1fr; }
   .lider { grid-template-columns: 1fr; }
   .outras .imagem { width: 84px; }
 }
@@ -1011,3 +1012,13 @@ a.resumo-titulo:hover { text-decoration: underline; }
 .domp-aviso { font-size: 0.75rem; }
 /* Números com fonte e aviso ao passar o mouse */
 .selo-instituicao[title], .instituicoes-indicadores[title], .retrato-cartao[title], .resumo-numeros li[title] { cursor: help; }
+
+/* Eventos da ESUMP: nome do evento, tipo, horário, local e inscrições */
+.esump-texto a.esump-titulo { font-size: 0.88rem; font-weight: 600; line-height: 1.35; color: var(--texto); }
+.esump-tipo { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--cor); }
+.esump-info { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; margin: 0; font-size: 0.76rem; line-height: 1.4; }
+.esump-info dt { color: var(--suave); font-weight: 600; }
+.esump-info dd { margin: 0; color: var(--texto); }
+.esump-acoes { margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.78rem; }
+.esump-acoes a:not(.etiqueta) { color: var(--cor); font-weight: 600; }
+.esump-acoes a:hover { text-decoration: underline; }
