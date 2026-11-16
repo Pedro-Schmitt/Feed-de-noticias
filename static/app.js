@@ -267,7 +267,7 @@ function painelDomp(dados) {
   }
   const links = elemento("div", "links-quadro");
   if (dados?.link) links.append(linkExterno(dados.link, `Ler a edição ${dados.numero} completa (PDF)`));
-  links.append(linkExterno(dados?.pagina || PAGINA_DOMP, "Acessar o Diário Oficial do MPGO"));
+  links.append(linkExterno(dados?.pagina || PAGINA_DOMP, "Acessar todas as edições do Diário Oficial do MPGO"));
   painel.append(links);
   return painel;
 }
@@ -787,7 +787,7 @@ const MOTIVOS_MATERIA = {
 
 
 // Os números das bases oficiais vêm com a fonte e o aviso de que podem conter erro
-const AVISO_DADOS = "A informação exibida pode conter erro ou estar desatualizada, não dispensando a confirmação pelo Promotor leitor.";
+const AVISO_DADOS = "A informação exibida pode conter erro ou estar desatualizada, não dispensando a confirmação do leitor.";
 
 /** Texto de "passar o mouse": as linhas, a fonte e o aviso (\n no title; <br> nos gráficos). */
 function dica(linhas, fonte, quebra = "\n") {
@@ -796,7 +796,7 @@ function dica(linhas, fonte, quebra = "\n") {
 
 /** Linha da fonte e do aviso no fim do texto de um gráfico (Plotly). */
 function rodapeGrafico(fonte) {
-  return `<br><span style="font-size:11px">Fonte: ${fonte}<br>A informação exibida pode conter erro ou estar desatualizada,<br>não dispensando a confirmação pelo Promotor leitor.</span>`;
+  return `<br><span style="font-size:11px">Fonte: ${fonte}<br>A informação exibida pode conter erro ou estar desatualizada,<br>não dispensando a confirmação do leitor.</span>`;
 }
 
 const ETAPAS_CURTAS = { "Anos iniciais": "anos iniciais", "Anos finais": "anos finais", "Ensino médio": "ensino médio" };

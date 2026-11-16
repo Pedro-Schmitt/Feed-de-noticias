@@ -32,6 +32,9 @@ _MES = "|".join(MESES)
 _DATA_TEXTO = re.compile(rf"\bdias?\s+(\d{{1,2}})º?(?:\s+de\s+({_MES}))?(?:\s*(?:,|e|a)\s*\d{{1,2}}º?)*"
                          rf"(?:\s+de\s+({_MES}))?(?:\s+de\s+(\d{{4}}))?", re.I)
 _DATA_TITULO = re.compile(r"\((\d{1,2})/(\d{1,2})(?:/(\d{4}))?\)")
+# "no dia 18/11/2026", "nos dias 25 e 26/11"
+_DATA_NUMERICA = re.compile(r"\bdias?\s+(\d{1,2})(?:\s*(?:,|e|a)\s*\d{1,2})*/(\d{1,2})(?:/(\d{4}))?")
+DIAS_BUSCA_PAGINA = 45  # evento sem data na lista: a data é procurada na página da notícia
 
 
 def _texto(trecho):
@@ -49,6 +52,15 @@ def data_do_evento(titulo, texto, publicado):
     if no_titulo:
         ano = int(no_titulo.group(3) or publicado.year)
         return date(ano, MESES.index(no_titulo.group(2).lower()) + 1, int(no_titulo.group(1)))
+    # No texto, vale a primeira data ("no dia 18/11/2026", "nos dias 30 de novembro e 1º de dezembro"),
+    # menos os prazos ("inscrições até o dia 25/11/2026")
+    candidatas = []
+    for achada in _DATA_NUMERICA.finditer(texto):
+        dia, mes, ano = achada.groups()
+        try:
+            candidatas.append((achada.start(), date(int(ano or publicado.year), int(mes), int(dia))))
+        except ValueError:
+            continue
     for achada in _DATA_TEXTO.finditer(texto):
         dia, mes1, mes2, ano = achada.groups()
         mes = mes1 or mes2
@@ -61,8 +73,21 @@ def data_do_evento(titulo, texto, publicado):
             continue
         if not achada.group(4) and data < publicado - timedelta(days=7):  # "dia 5 de janeiro" publicado em dezembro
             data = data.replace(year=ano + 1)
-        return data
-    return None
+        candidatas.append((achada.start(), data))
+    candidatas = [(pos, data) for pos, data in candidatas if not re.search(r"\baté\s+(?:o\s+)?$", texto[max(0, pos - 10):pos], re.I)]
+    return min(candidatas)[1] if candidatas else None
+
+
+def _texto_da_noticia(link):
+    """O texto da notícia (da página dela), para achar a data que o resumo da lista não traz."""
+    try:
+        resp = requests.get(link, timeout=TIMEOUT, headers=CABECALHOS)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return ""
+    texto = _texto(re.sub(r"<(script|style)[^>]*>.*?</>", " ", resp.text, flags=re.S | re.I))
+    inicio = texto.find("Visualizações")  # o corpo vem depois da data e das visualizações
+    return texto[inicio:inicio + 4000] if inicio >= 0 else ""
 
 
 def _pagina(numero):
@@ -80,9 +105,12 @@ def _pagina(numero):
         texto = _texto(corpo.group(1)) if corpo else ""
         publicado = datetime.strptime(publicado.group(1), "%d/%m/%Y").date()
         quando = data_do_evento(titulo, texto, publicado)
+        url = MPGO + link.group(1) if link.group(1).startswith("/") else link.group(1)
+        if not quando and publicado >= date.today() - timedelta(days=DIAS_BUSCA_PAGINA):
+            quando = data_do_evento(titulo, _texto_da_noticia(url), publicado)
         eventos.append({
             "titulo": titulo,
-            "link": MPGO + link.group(1) if link.group(1).startswith("/") else link.group(1),
+            "link": url,
             "publicado": publicado.isoformat(),
             "data": quando.isoformat() if quando else None,
             "inscricoes": bool(re.search(r"inscri[çc][õo]es (est[ãa]o )?abertas|abre inscri|abertas as inscri",
